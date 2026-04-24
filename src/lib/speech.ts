@@ -1,4 +1,3 @@
-// Tiny wrapper around the Web Speech API for TTS (with graceful fallback).
 let voicesCache: SpeechSynthesisVoice[] = [];
 
 function loadVoices(): Promise<SpeechSynthesisVoice[]> {
@@ -12,16 +11,20 @@ function loadVoices(): Promise<SpeechSynthesisVoice[]> {
   });
 }
 
-export async function speak(text: string, opts: { rate?: number; pitch?: number } = {}) {
+export async function speak(text: string, opts: { rate?: number; pitch?: number } = {}): Promise<void> {
   if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
   window.speechSynthesis.cancel();
   if (!voicesCache.length) await loadVoices();
-  const u = new SpeechSynthesisUtterance(text);
-  const en = voicesCache.find((v) => /en/i.test(v.lang));
-  if (en) u.voice = en;
-  u.rate = opts.rate ?? 1;
-  u.pitch = opts.pitch ?? 1;
-  window.speechSynthesis.speak(u);
+  return new Promise((resolve) => {
+    const u = new SpeechSynthesisUtterance(text);
+    const en = voicesCache.find((v) => /en-US|en-GB|en/i.test(v.lang));
+    if (en) u.voice = en;
+    u.rate = opts.rate ?? 1;
+    u.pitch = opts.pitch ?? 1;
+    u.onend = () => resolve();
+    u.onerror = () => resolve();
+    window.speechSynthesis.speak(u);
+  });
 }
 
 export function stopSpeaking() {
