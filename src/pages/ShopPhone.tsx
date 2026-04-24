@@ -187,6 +187,21 @@ export default function ShopPhone() {
                     "Authorization": `Bearer ${token}`
                 },
                 body: JSON.stringify({
+                    system: [
+                        {
+                            text: `You are an AI assistant for a visually impaired user. You receive an image from their camera.
+You MUST output ONLY a valid JSON object describing the image. NO pleasantries, NO apologies, NO markdown code blocks.
+Even if the image does not depict a grocery product (e.g., a face, person, or empty room), you MUST still return a JSON object describing what you see.
+Format exactly as follows:
+{
+  "name": "Short name of what you see (or 'Unknown')",
+  "brand": "Brand or 'N/A'",
+  "price": 0.00,
+  "currency": "€",
+  "description": "Clear description of what you see so the user knows what they are pointing at."
+}`
+                        }
+                    ],
                     messages: [
                         {
                             role: "user",
@@ -198,16 +213,7 @@ export default function ShopPhone() {
                                     }
                                 },
                                 {
-                                    text: `You are an AI assistant helping a visually impaired user shop for groceries. You receive an image of a product from a phone camera. 
-Respond ONLY with a valid JSON object in the exact following format, with no markdown formatting or extra text:
-{
-  "name": "Product Name",
-  "brand": "Brand Name",
-  "price": 0.00,
-  "currency": "€",
-  "description": "Short, highly descriptive text describing the product, its size/weight, brand, and a reasonable estimated price. Sound natural."
-}
-If you cannot identify the exact product, provide a helpful general description and make a reasonable guess. DO NOT wrap the JSON in markdown code blocks like \`\`\`json.`
+                                    text: "Provide the JSON description for this image."
                                 }
                             ]
                         }
@@ -222,12 +228,23 @@ If you cannot identify the exact product, provide a helpful general description 
             const data = await response.json();
             const jsonStr = data.output.message.content[0].text;
             let scanned: ScannedProduct;
+
             try {
-                scanned = JSON.parse(jsonStr);
-            } catch (e) {
-                // remove any accidental markdown backticks just in case
-                const cleaned = jsonStr.replace(/```json/g, '').replace(/```/g, '').trim();
+                let cleaned = jsonStr.replace(/```json/g, '').replace(/```/g, '').trim();
+                const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
+                if (jsonMatch) {
+                    cleaned = jsonMatch[0];
+                }
                 scanned = JSON.parse(cleaned);
+            } catch (e) {
+                // If it STILL fails to parse, fallback to using the raw text as the description
+                scanned = {
+                    name: "Unrecognized Item",
+                    brand: "Unknown",
+                    price: 0,
+                    currency: "€",
+                    description: jsonStr.replace(/"/g, '').substring(0, 200)
+                };
             }
 
             setProduct(scanned);
