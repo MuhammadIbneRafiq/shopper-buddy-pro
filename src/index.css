@@ -1,14 +1,10 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* ═══════════════════════════════════════════════════════════════
-   SHOPPER BUDDY PRO — Phone Mode for Visually Impaired
-   Accessibility-first: high-contrast, large touch targets,
-   big readable type, generous spacing.
-   ═══════════════════════════════════════════════════════════════ */
-
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+/* ═══════════════════════════════════════════════════════════════ */
 
 @layer base {
   :root {
@@ -70,7 +66,10 @@
 }
 
 @layer base {
-  * { @apply border-border; }
+  * {
+    @apply border-border;
+  }
+
   body {
     @apply bg-background text-foreground;
     font-family: 'Inter', system-ui, -apple-system, sans-serif;
@@ -81,18 +80,38 @@
     touch-action: manipulation;
     -webkit-tap-highlight-color: transparent;
   }
+
   :focus-visible {
     @apply outline-none ring-4 ring-ring ring-offset-2 ring-offset-background rounded-lg;
   }
-  button, a, [role="button"] { min-height: 48px; }
+
+  button,
+  a,
+  [role="button"] {
+    min-height: 48px;
+  }
 }
 
 @layer utilities {
-  .gradient-hero { background: var(--gradient-hero); }
-  .gradient-warm { background: var(--gradient-warm); }
-  .shadow-soft { box-shadow: var(--shadow-soft); }
-  .shadow-strong { box-shadow: var(--shadow-strong); }
-  .transition-smooth { transition: var(--transition-smooth); }
+  .gradient-hero {
+    background: var(--gradient-hero);
+  }
+
+  .gradient-warm {
+    background: var(--gradient-warm);
+  }
+
+  .shadow-soft {
+    box-shadow: var(--shadow-soft);
+  }
+
+  .shadow-strong {
+    box-shadow: var(--shadow-strong);
+  }
+
+  .transition-smooth {
+    transition: var(--transition-smooth);
+  }
 }
 
 
@@ -146,7 +165,7 @@
   align-items: center;
   justify-content: space-between;
   padding: 14px 18px;
-  background: linear-gradient(to bottom, hsla(220,18%,5%,0.85) 0%, transparent 100%);
+  background: linear-gradient(to bottom, hsla(220, 18%, 5%, 0.85) 0%, transparent 100%);
 }
 
 .shop-phone__logo {
@@ -219,8 +238,15 @@
 }
 
 @keyframes setup-glow {
-  from { opacity: 0.7; transform: scale(0.96); }
-  to   { opacity: 1;   transform: scale(1.04); }
+  from {
+    opacity: 0.7;
+    transform: scale(0.96);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1.04);
+  }
 }
 
 .shop-phone__overlay--scanning {
@@ -245,13 +271,13 @@
   align-items: center;
   justify-content: flex-end;
   padding: 28px 24px 24px;
-  background: linear-gradient(to top, hsla(220,18%,5%,0.95) 60%, transparent 100%);
+  background: linear-gradient(to top, hsla(220, 18%, 5%, 0.95) 60%, transparent 100%);
   gap: 6px;
   animation: slide-up 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 .shop-phone__product-overlay--added {
-  background: linear-gradient(to top, hsla(152,72%,12%,0.95) 60%, transparent 100%);
+  background: linear-gradient(to top, hsla(152, 72%, 12%, 0.95) 60%, transparent 100%);
 }
 
 .shop-phone__check-circle {
@@ -269,8 +295,15 @@
 }
 
 @keyframes check-pop {
-  from { transform: scale(0); opacity: 0; }
-  to   { transform: scale(1); opacity: 1; }
+  from {
+    transform: scale(0);
+    opacity: 0;
+  }
+
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
 }
 
 .shop-phone__product-name {
@@ -299,7 +332,7 @@
 
 /* Amber tint when in quantity mode */
 .shop-phone__product-overlay--quantity {
-  background: linear-gradient(to top, hsla(36,100%,10%,0.95) 60%, transparent 100%);
+  background: linear-gradient(to top, hsla(36, 100%, 10%, 0.95) 60%, transparent 100%);
 }
 
 .shop-phone__product-overlay--quantity .shop-phone__product-price {
@@ -320,8 +353,15 @@
 }
 
 @keyframes qty-pop {
-  from { transform: scale(0.7); opacity: 0.4; }
-  to   { transform: scale(1);   opacity: 1; }
+  from {
+    transform: scale(0.7);
+    opacity: 0.4;
+  }
+
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
 }
 
 /* ── Scan frame corners ──────────────────────────────────────── */
@@ -341,10 +381,38 @@
   border-style: solid;
   border-width: 0;
 }
-.corner.tl { top:0;    left:0;  border-top-width: 4px; border-left-width: 4px;  border-radius: 8px 0 0 0; }
-.corner.tr { top:0;    right:0; border-top-width: 4px; border-right-width: 4px; border-radius: 0 8px 0 0; }
-.corner.bl { bottom:0; left:0;  border-bottom-width: 4px; border-left-width: 4px;  border-radius: 0 0 0 8px; }
-.corner.br { bottom:0; right:0; border-bottom-width: 4px; border-right-width: 4px; border-radius: 0 0 8px 0; }
+
+.corner.tl {
+  top: 0;
+  left: 0;
+  border-top-width: 4px;
+  border-left-width: 4px;
+  border-radius: 8px 0 0 0;
+}
+
+.corner.tr {
+  top: 0;
+  right: 0;
+  border-top-width: 4px;
+  border-right-width: 4px;
+  border-radius: 0 8px 0 0;
+}
+
+.corner.bl {
+  bottom: 0;
+  left: 0;
+  border-bottom-width: 4px;
+  border-left-width: 4px;
+  border-radius: 0 0 0 8px;
+}
+
+.corner.br {
+  bottom: 0;
+  right: 0;
+  border-bottom-width: 4px;
+  border-right-width: 4px;
+  border-radius: 0 0 8px 0;
+}
 
 /* ── Listening indicator (3 animated dots) ──────────────────── */
 
@@ -371,12 +439,28 @@
   background: hsl(var(--destructive));
   animation: dot-bounce 1s ease-in-out infinite;
 }
-.shop-phone__listening-dot:nth-child(2) { animation-delay: 0.15s; }
-.shop-phone__listening-dot:nth-child(3) { animation-delay: 0.30s; }
+
+.shop-phone__listening-dot:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.shop-phone__listening-dot:nth-child(3) {
+  animation-delay: 0.30s;
+}
 
 @keyframes dot-bounce {
-  0%, 80%, 100% { transform: scale(0.7); opacity: 0.5; }
-  40%           { transform: scale(1.2); opacity: 1; }
+
+  0%,
+  80%,
+  100% {
+    transform: scale(0.7);
+    opacity: 0.5;
+  }
+
+  40% {
+    transform: scale(1.2);
+    opacity: 1;
+  }
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -414,11 +498,9 @@
 .shop-phone__main-btn-glow {
   position: absolute;
   inset: 0;
-  background: radial-gradient(
-    ellipse at 50% 20%,
-    hsla(0, 0%, 100%, 0.18) 0%,
-    transparent 70%
-  );
+  background: radial-gradient(ellipse at 50% 20%,
+      hsla(0, 0%, 100%, 0.18) 0%,
+      transparent 70%);
   pointer-events: none;
   transition: opacity 0.3s ease;
 }
@@ -433,8 +515,15 @@
 }
 
 @keyframes idle-breathe {
-  0%, 100% { box-shadow: 0 -8px 40px hsla(174, 90%, 42%, 0.3); }
-  50%       { box-shadow: 0 -8px 60px hsla(174, 90%, 42%, 0.55); }
+
+  0%,
+  100% {
+    box-shadow: 0 -8px 40px hsla(174, 90%, 42%, 0.3);
+  }
+
+  50% {
+    box-shadow: 0 -8px 60px hsla(174, 90%, 42%, 0.55);
+  }
 }
 
 /* SCANNING: pulsing teal */
@@ -445,8 +534,15 @@
 }
 
 @keyframes scanning-pulse {
-  0%, 100% { opacity: 1; }
-  50%       { opacity: 0.65; }
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.65;
+  }
 }
 
 /* LISTENING / HOLDING: red */
@@ -457,8 +553,15 @@
 }
 
 @keyframes listening-breathe {
-  0%, 100% { box-shadow: 0 -8px 40px hsla(0, 80%, 55%, 0.4); }
-  50%       { box-shadow: 0 -8px 80px hsla(0, 80%, 55%, 0.7); }
+
+  0%,
+  100% {
+    box-shadow: 0 -8px 40px hsla(0, 80%, 55%, 0.4);
+  }
+
+  50% {
+    box-shadow: 0 -8px 80px hsla(0, 80%, 55%, 0.7);
+  }
 }
 
 /* SUCCESS: green */
@@ -469,8 +572,13 @@
 }
 
 @keyframes success-flash {
-  0%   { filter: brightness(1.5); }
-  100% { filter: brightness(1); }
+  0% {
+    filter: brightness(1.5);
+  }
+
+  100% {
+    filter: brightness(1);
+  }
 }
 
 /* QUANTITY COUNTING: amber — each tap causes a ripple flash */
@@ -481,8 +589,15 @@
 }
 
 @keyframes qty-glow {
-  0%, 100% { box-shadow: 0 -8px 40px hsla(36, 100%, 58%, 0.4); }
-  50%       { box-shadow: 0 -8px 70px hsla(36, 100%, 58%, 0.7); }
+
+  0%,
+  100% {
+    box-shadow: 0 -8px 40px hsla(36, 100%, 58%, 0.4);
+  }
+
+  50% {
+    box-shadow: 0 -8px 70px hsla(36, 100%, 58%, 0.7);
+  }
 }
 
 /* ── Animations ──────────────────────────────────────────────── */
@@ -492,13 +607,27 @@
 }
 
 @keyframes scan-bob {
-  0%, 100% { transform: translateY(0) scale(1); }
-  50%       { transform: translateY(-8px) scale(1.06); }
+
+  0%,
+  100% {
+    transform: translateY(0) scale(1);
+  }
+
+  50% {
+    transform: translateY(-8px) scale(1.06);
+  }
 }
 
 @keyframes slide-up {
-  from { transform: translateY(20px); opacity: 0; }
-  to   { transform: translateY(0);    opacity: 1; }
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
 }
 
 /* ── Desktop frame ───────────────────────────────────────────── */
@@ -514,4 +643,3 @@
     overflow: hidden;
   }
 }
-
