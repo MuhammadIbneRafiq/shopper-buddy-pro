@@ -1,4 +1,6 @@
 ﻿import { useEffect, useRef, useState, useCallback } from "react";
+import { scanAndMatch } from "@/lib/rag";
+import { evaluateSituation, processVoiceInput } from "@/lib/situationGraph";
 import { ShoppingCart, Package, ScanBarcode, Check } from "lucide-react";
 import { speak, stopSpeaking } from "@/lib/speech";
 import { bunq } from "@/lib/bunq";
@@ -133,6 +135,7 @@ export default function ShopPhone() {
     const [product, setProduct] = useState<Product | null>(null);
     const [basket, setBasket] = useState<BasketItem[]>([]);
     const [cameraOn, setCameraOn] = useState(false);
+    const [balance, setBalance] = useState<number | null>(null);
     const [isHolding, setIsHolding] = useState(false);
 
     // Quantity counter (only used in "quantity" state)
@@ -175,6 +178,11 @@ export default function ShopPhone() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
+
+    // Load BUNQ balance on mount for situation graph
+    useEffect(() => {
+        bunq.getBalance().then(b => setBalance(parseFloat(b))).catch(() => {});
+    }, []);
     // â”€â”€ Cleanup â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     useEffect(() => () => { stopSpeaking(); }, []);
 
@@ -206,125 +214,42 @@ export default function ShopPhone() {
     // â”€â”€ Step handlers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     /** STEP 1: Scan product (press button once) */
-    async function handleScan() {
-        if (!cameraOn) {
-            await startCamera();
-        }
+        if (!cameraOn) await startCamera();
         setAppState("scanning");
         speak("Scanning product. Please hold steady.");
-
-        // Wait a brief moment to let the camera adjust
         await new Promise((r) => setTimeout(r, 1000));
 
         let base64Image = "";
         if (videoRef.current && canvasRef.current) {
             const video = videoRef.current;
             const canvas = canvasRef.current;
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
+            canvas.width = video.videoWidth; canvas.height = video.videoHeight;
             const ctx = canvas.getContext("2d");
-            if (ctx) {
-                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                base64Image = canvas.toDataURL("image/jpeg", 0.6).split(",")[1];
-            }
+            if (ctx) { ctx.drawImage(video, 0, 0, canvas.width, canvas.height); base64Image = canvas.toDataURL("image/jpeg", 0.6).split(",")[1]; }
         }
 
-        if (!base64Image) {
-            toast.error("Failed to capture image");
-            speak("Failed to capture image. Using demo product.");
-            const scanned = randomProduct();
-            setProduct(scanned);
-            setAppState("scanned");
-            speak(scanned.tts + " Would you like to add this to your basket?");
-            return;
-        }
-
-        try {
-            const token = import.meta.env.VITE_AWS_BEARER_TOKEN_BEDROCK;
-            if (!token) throw new Error("Missing AWS Bedrock Token in .env");
-
-            const response = await fetch("https://bedrock-runtime.us-east-1.amazonaws.com/model/anthropic.claude-3-haiku-20240307-v1:0/converse", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    "Authorization": `Bearer ${token}`
-                },
-                body: JSON.stringify({
-                    system: [
-                        {
-                            text: `You are an AI assistant for a visually impaired user. You receive an image from their camera.
-You MUST output ONLY a valid JSON object describing the image. NO pleasantries, NO apologies, NO markdown code blocks.
-Even if the image does not depict a grocery product (e.g., a face, person, or empty room), you MUST still return a JSON object describing what you see.
-Format exactly as follows:
-{
-  "name": "Short name of what you see (or 'Unknown')",
-  "brand": "Brand or 'N/A'",
-  "price": 0.00,
-  "currency": "â‚¬",
-  "tts": "Clear description of what you see so the user knows what they are pointing at."
-} `
-                        }
-                    ],
-                    messages: [
-                        {
-                            role: "user",
-                            content: [
-                                {
-                                    image: {
-                                        format: "jpeg",
-                                        source: { bytes: base64Image }
-                                    }
-                                },
-                                {
-                                    text: "Provide the JSON description for this image."
-                                }
-                            ]
-                        }
-                    ]
-                })
-            });
-
-            if (!response.ok) {
-                throw new Error("Bedrock API Error: " + response.status);
-            }
-
-            const data = await response.json();
-            const jsonStr = data.output.message.content[0].text;
-            let scanned: Product;
-
+        // Try RAG-powered scan first (vision + Dutch product matching)
+        if (base64Image) {
             try {
-                let cleaned = jsonStr.replace(/```json/g, '').replace(/```/g, '').trim();
-                const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
-                if (jsonMatch) {
-                    cleaned = jsonMatch[0];
+                const matched = await scanAndMatch(base64Image);
+                if (matched) {
+                    setProduct({ name: matched.name, brand: matched.brand, price: matched.price, currency: "€", tts: matched.tts });
+                    setAppState("scanned");
+                    // Situation graph decides what to say
+                    const ctx = { appState: "scanned" as const, inputMode, basketTotal, basketCount, balance, productPrice: matched.price, productName: matched.name, allergens: matched.allergens, isPublicPlace: inputMode === "button" };
+                    const situation = evaluateSituation(ctx);
+                    if (situation.speak) speak(situation.speak);
+                    return;
                 }
-                scanned = JSON.parse(cleaned);
-                scanned.price = parseFloat(scanned.price) || 0;
-            } catch (e) {
-                // If it STILL fails to parse, fallback to using the raw text as the description
-                scanned = {
-                    name: "Unrecognized Item",
-                    brand: "Unknown",
-                    price: 0,
-                    currency: "â‚¬",
-                    tts: jsonStr.replace(/"/g, '').substring(0, 200)
-                };
-            }
-
-            setProduct(scanned);
-            setAppState("scanned");
-
-            // Speak the product description
-            speak(scanned.tts + " Would you like to add this to your basket?");
-        } catch (e) {
-            console.error("Scan error:", e);
-            speak("Sorry, I had trouble analyzing the image. Using demo product.");
-            const scanned = randomProduct();
-            setProduct(scanned);
-            setAppState("scanned");
-            speak(scanned.tts + " Would you like to add this to your basket?");
+            } catch { /* fall through to demo */ }
         }
-        setCameraOn(true); // demo mode
+
+        // Fallback: demo product
+        const scanned = randomProduct();
+        setProduct(scanned);
+        setAppState("scanned");
+        speak(scanned.tts + " Wil je dit toevoegen aan je mandje?");
+        setCameraOn(true);
     }
 
     // REMOVED PREMATURE CLOSING BRACE HERE
@@ -561,83 +486,46 @@ Format exactly as follows:
     // â”€â”€ Voice transcript processing â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     useEffect(() => {
         if (!transcript) return;
-        const lower = transcript.toLowerCase().trim();
         const state = appStateRef.current;
-        // â”€â”€ Setup: voice picks mode â”€â”€
-        if (state === "setup") {
-            if (lower.includes("voice")) {
-                setInputMode("voice");
-                setAppState("idle");
-                speak("Voice mode selected. I'll listen after each prompt. Say scan to start.").then(() => startListening());
-            } else if (lower.includes("button")) {
-                setInputMode("button");
-                setAppState("idle");
-                speak("Button mode selected. Press the big button to scan.");
-            } else {
-                // Didn't understand â€” ask again
-                speak("Say button or voice.").then(() => startListening());
-            }
-            setTranscript("");
-            return;
-        }
-
-
-
-        if (state === "scanned") {
-            // User responded to "add to basket?"
-            const num = parseInt(lower);
-            if (!isNaN(num) && num > 0) {
-                // Said a specific number â†’ accept with that quantity
-                doAddToBasket(num);
-            } else if (lower.includes("yes") || lower.includes("add") || lower.includes("yeah")) {
-                doAccept();
-            } else if (lower.includes("no") || lower.includes("skip") || lower.includes("nope")) {
-                doSkip();
-            }
-
-        } else if (state === "quantity") {
-            // User responded to "how many?"
-            const num = parseInt(lower);
-            if (!isNaN(num) && num > 0) {
-                doAddToBasket(num);
-            } else if (lower.includes("done") || lower.includes("confirm") || lower.includes("yes")) {
-                doAddToBasket(qtyRef.current);
-            } else if (lower.includes("cancel") || lower.includes("no") || lower.includes("skip")) {
+        const ctx = {
+            appState: state,
+            inputMode: inputModeRef.current,
+            basketTotal: basketRef.current.reduce((s: number, b: any) => s + b.product.price * b.qty, 0),
+            basketCount: basketRef.current.reduce((s: number, b: any) => s + b.qty, 0),
+            balance,
+            productPrice: productRef.current ? Number(productRef.current.price) : null,
+            productName: productRef.current?.name ?? null,
+            allergens: [],
+            isPublicPlace: inputModeRef.current === "button",
+        };
+        const result = processVoiceInput(transcript, ctx);
+        switch (result.action) {
+            case "set_voice": setInputMode("voice"); setAppState("idle"); speak("Stem modus. Ik luister na elk bericht.").then(() => startListening()); break;
+            case "set_button": setInputMode("button"); setAppState("idle"); speak("Knop modus. Druk de grote knop om te scannen."); break;
+            case "repeat_setup": speak("Zeg knop of stem.").then(() => startListening()); break;
+            case "accept": doAccept(); break;
+            case "skip": doSkip(); break;
+            case "add": doAddToBasket(result.qty ?? 1); break;
+            case "confirm_qty": doAddToBasket(qtyRef.current); break;
+            case "cancel":
                 if (qtyTimerRef.current) { clearTimeout(qtyTimerRef.current); qtyTimerRef.current = null; }
-                qtyRef.current = 0;
-                setQty(0);
-                setAppState("idle");
-                setProduct(null);
-                speak("Cancelled.");
-            }
-
-        } else if (state === "idle") {
-            if (lower.includes("scan") || lower.includes("product")) {
-                doScan();
-            } else if (lower.includes("basket") || lower.includes("cart") || lower.includes("total")) {
-                readBasket();
-            } else if (lower.includes("checkout") || lower.includes("pay")) {
-                doPayment();
-            }
-        } else if (state === "checkout") {
-            if (lower.includes("yes") || lower.includes("pay") || lower.includes("confirm")) {
-                doPayment();
-            } else if (lower.includes("no") || lower.includes("cancel") || lower.includes("back")) {
-                setAppState("idle");
-                speak("Returning to scan mode.");
-            }
+                qtyRef.current = 0; setQty(0); setAppState("idle"); setProduct(null); speak("Geannuleerd."); break;
+            case "scan": doScan(); break;
+            case "read_basket": readBasket(); break;
+            case "checkout": readBasket(); break;
+            case "pay": doPayment(); break;
+            case "read_balance":
+                speak(balance !== null ? `Je saldo is ${balance.toFixed(2)} euro.` : "Saldo niet beschikbaar."); break;
+            default:
+                if (state !== "setup") speak("Ik begreep dat niet. Probeer opnieuw."); break;
         }
-        // In voice mode: auto-re-listen after TTS finishes so it's truly voice-to-voice
-        if (inputModeRef.current === "voice" && appStateRef.current !== "scanning" && appStateRef.current !== "paying") {
-            // Small delay so TTS can start before we listen
-            setTimeout(() => startListening(), 300);
+        // Auto-re-listen in voice mode
+        if (inputModeRef.current === "voice" && state !== "scanning" && state !== "paying") {
+            setTimeout(() => startListening(), 400);
         }
-
-
         setTranscript("");
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [transcript]);
-
+    }, [transcript, balance]);
     // â”€â”€ Derived values â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     const basketTotal = basket.reduce((s, b) => s + b.product.price * b.qty, 0);
     const basketCount = basket.reduce((s, b) => s + b.qty, 0);
