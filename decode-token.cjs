@@ -1,0 +1,18 @@
+const fs = require('fs');
+const env = fs.readFileSync('.env', 'utf8');
+const match = env.match(/VITE_AWS_BEARER_TOKEN_BEDROCK="([^"]+)"/);
+const token = match[1];
+const b64 = token.replace('bedrock-api-key-', '');
+const decoded = Buffer.from(b64, 'base64').toString('utf8');
+const qs = decoded.includes('?') ? decoded.split('?')[1] : decoded;
+const params = new URLSearchParams(qs);
+const cred = params.get('X-Amz-Credential') || '';
+const parts = cred.split('/');
+console.log('AccessKeyId:', parts[0]);
+console.log('Date:', parts[1]);
+console.log('Region:', parts[2]);
+console.log('Service:', parts[3]);
+console.log('X-Amz-Date:', params.get('X-Amz-Date'));
+console.log('Expires:', params.get('X-Amz-Expires'), 'seconds =', Math.round(parseInt(params.get('X-Amz-Expires')||'0')/3600), 'hours');
+const st = params.get('X-Amz-Security-Token') || '';
+console.log('SessionToken (50 chars):', st.substring(0, 50));
