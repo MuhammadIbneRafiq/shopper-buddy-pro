@@ -1,4 +1,4 @@
-﻿import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { ShoppingCart, Package, ScanBarcode, Check } from "lucide-react";
 import { speak, stopSpeaking } from "@/lib/speech";
 import { bunq } from "@/lib/bunq";
@@ -240,76 +240,31 @@ export default function ShopPhone() {
         }
 
         try {
-            const token = import.meta.env.VITE_AWS_BEARER_TOKEN_BEDROCK;
-            if (!token) throw new Error("Missing AWS Bedrock Token in .env");
-
-            const response = await fetch("https://bedrock-runtime.us-east-1.amazonaws.com/model/anthropic.claude-3-haiku-20240307-v1:0/converse", {
+            const response = await fetch("/api/rag", {
                 method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    "Authorization": `Bearer ${token}`
-                },
-                body: JSON.stringify({
-                    system: [
-                        {
-                            text: `You are an AI assistant for a visually impaired user. You receive an image from their camera.
-You MUST output ONLY a valid JSON object describing the image. NO pleasantries, NO apologies, NO markdown code blocks.
-Even if the image does not depict a grocery product (e.g., a face, person, or empty room), you MUST still return a JSON object describing what you see.
-Format exactly as follows:
-{
-  "name": "Short name of what you see (or 'Unknown')",
-  "brand": "Brand or 'N/A'",
-  "price": 0.00,
-  "currency": "â‚¬",
-  "tts": "Clear description of what you see so the user knows what they are pointing at."
-} `
-                        }
-                    ],
-                    messages: [
-                        {
-                            role: "user",
-                            content: [
-                                {
-                                    image: {
-                                        format: "jpeg",
-                                        source: { bytes: base64Image }
-                                    }
-                                },
-                                {
-                                    text: "Provide the JSON description for this image."
-                                }
-                            ]
-                        }
-                    ]
-                })
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ imageBase64: base64Image })
             });
 
             if (!response.ok) {
-                throw new Error("Bedrock API Error: " + response.status);
+                throw new Error("RAG API Error: " + response.status);
             }
 
             const data = await response.json();
-            const jsonStr = data.output.message.content[0].text;
-            let scanned: Product;
-
-            try {
-                let cleaned = jsonStr.replace(/```json/g, '').replace(/```/g, '').trim();
-                const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
-                if (jsonMatch) {
-                    cleaned = jsonMatch[0];
-                }
-                scanned = JSON.parse(cleaned);
-                scanned.price = parseFloat(scanned.price) || 0;
-            } catch (e) {
-                // If it STILL fails to parse, fallback to using the raw text as the description
-                scanned = {
-                    name: "Unrecognized Item",
-                    brand: "Unknown",
-                    price: 0,
-                    currency: "â‚¬",
-                    tts: jsonStr.replace(/"/g, '').substring(0, 200)
-                };
+            
+            if (!data.success || !data.match || !data.match.product) {
+                throw new Error(data.error || "No match found from RAG pipeline");
             }
+
+            // Convert backend product schema to the frontend schema
+            const p = data.match.product;
+            const scanned: Product = {
+                name: p.name,
+                brand: p.brand || 'Unknown',
+                price: parseFloat(p.price) || 0,
+                currency: "€",
+                tts: `I found ${p.name}. The price is ${p.price} euros. ${data.match.reasoning}`
+            };
 
             setProduct(scanned);
             setAppState("scanned");
