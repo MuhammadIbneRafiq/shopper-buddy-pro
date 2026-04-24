@@ -164,6 +164,18 @@ export default function ShopPhone() {
     useEffect(() => { basketRef.current = basket; }, [basket]);
     useEffect(() => { productRef.current = product; }, [product]);
 
+    // AUTO-LISTEN PATCH: speak welcome then immediately listen for "button"/"voice"
+    useEffect(() => {
+        let cancelled = false;
+        const t = setTimeout(async () => {
+            await speak("Welcome to Shopper Buddy. Say button or voice to choose your mode.");
+            if (!cancelled) startListening();
+        }, 700);
+        return () => { cancelled = true; clearTimeout(t); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+    /* REPLACED ORIGINAL WELCOME EFFECT BELOW — kept for reference
+
     // ── Welcome TTS on first mount ────────────────────────────
     useEffect(() => {
         const t = setTimeout(() => {
@@ -174,6 +186,8 @@ export default function ShopPhone() {
             );
         }, 700);
         return () => clearTimeout(t);
+    */
+
     }, []);
 
     // ── Cleanup ───────────────────────────────────────────────
@@ -563,6 +577,25 @@ Format exactly as follows:
         if (!transcript) return;
         const lower = transcript.toLowerCase().trim();
         const state = appStateRef.current;
+        // ── Setup: voice picks mode ──
+        if (state === "setup") {
+            if (lower.includes("voice")) {
+                setInputMode("voice");
+                setAppState("idle");
+                speak("Voice mode selected. I'll listen after each prompt. Say scan to start.").then(() => startListening());
+            } else if (lower.includes("button")) {
+                setInputMode("button");
+                setAppState("idle");
+                speak("Button mode selected. Press the big button to scan.");
+            } else {
+                // Didn't understand — ask again
+                speak("Say button or voice.").then(() => startListening());
+            }
+            setTranscript("");
+            return;
+        }
+
+
 
         if (state === "scanned") {
             // User responded to "add to basket?"
@@ -608,6 +641,12 @@ Format exactly as follows:
                 speak("Returning to scan mode.");
             }
         }
+        // In voice mode: auto-re-listen after TTS finishes so it's truly voice-to-voice
+        if (inputModeRef.current === "voice" && appStateRef.current !== "scanning" && appStateRef.current !== "paying") {
+            // Small delay so TTS can start before we listen
+            setTimeout(() => startListening(), 300);
+        }
+
 
         setTranscript("");
         // eslint-disable-next-line react-hooks/exhaustive-deps
