@@ -1,1 +1,16 @@
 project_id = "ggxwivhqqtgigbpygfnn"
+
+[functions.recognize-product]
+verify_jwt = false
+
+[functions.parse-receipt]
+verify_jwt = false
+
+[functions.budget-agent]
+verify_jwt = true
+
+[functions.notify-helper]
+verify_jwt = true
+
+[functions.bunq-mock]
+verify_jwt = true
