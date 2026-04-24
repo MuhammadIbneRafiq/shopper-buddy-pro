@@ -213,6 +213,7 @@ export default function ShopPhone() {
 
     // â”€â”€ Step handlers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
+    async function handleScan() {
     /** STEP 1: Scan product (press button once) */
         if (!cameraOn) await startCamera();
         setAppState("scanning");
