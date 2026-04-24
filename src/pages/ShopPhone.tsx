@@ -299,6 +299,7 @@ Format exactly as follows:
                     cleaned = jsonMatch[0];
                 }
                 scanned = JSON.parse(cleaned);
+                scanned.price = parseFloat(scanned.price) || 0;
             } catch (e) {
                 // If it STILL fails to parse, fallback to using the raw text as the description
                 scanned = {
@@ -712,7 +713,7 @@ Format exactly as follows:
                         <div className="shop-phone__product-name">{product.name}</div>
                         <div className="shop-phone__product-brand">{product.brand}</div>
                         <div className="shop-phone__product-price">
-                            {product.currency}{product.price.toFixed(2)}
+                            {product.currency}{Number(product.price).toFixed(2)}
                         </div>
                     </div>
                 )}
