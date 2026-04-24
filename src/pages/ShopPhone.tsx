@@ -1,76 +1,97 @@
 import { useEffect, useRef, useState, useCallback } from "react";
-import {
-    Camera,
-    Mic,
-    MicOff,
-    ShoppingCart,
-    Plus,
-    Minus,
-    Check,
-    X,
-    Volume2,
-    RotateCcw,
-    Package,
-    ScanBarcode,
-} from "lucide-react";
+import { ShoppingCart, Package, ScanBarcode, Check } from "lucide-react";
 import { speak, stopSpeaking } from "@/lib/speech";
 import { toast } from "sonner";
 
 /*
   ╔═══════════════════════════════════════════════════════════════╗
-  ║  SHOPPER BUDDY — PHONE MODE (Visually Impaired)             ║
+  ║  SHOPPER BUDDY — Flow (from whiteboard)                     ║
   ║                                                             ║
-  ║  Flow (from whiteboard):                                    ║
-  ║    Open → [Press once] Scan product                         ║
-  ║         → [Press & hold] Speech-to-text input               ║
-  ║    Step 1: Scanning → Product description (spoken)          ║
-  ║    Step 2: "Add to basket?" → Yes / No                      ║
-  ║      If Yes → "How many?" → Add to basket                   ║
-  ║    Step 3: End (back to scan)                               ║
+  ║  1. Scan  →  TTS: product description                       ║
+  ║  2. "Add to basket?"                                        ║
+  ║       Single tap  = YES  →  "How many?"                     ║
+  ║       Double tap  = NO   →  skip, back to scan              ║
+  ║  3. Tap N times   = quantity  (TTS speaks each number)      ║
+  ║     2.5 s silence = auto-add                                ║
+  ║     Hold          = add immediately                         ║
+  ║  4. Back to scan                                            ║
+  ║                                                             ║
+  ║  Setup  (first launch):                                     ║
+  ║    Single tap = button mode                                 ║
+  ║    Hold       = voice mode                                  ║
+  ║                                                             ║
+  ║  "Explain only available functions"                         ║
+  ║  → TTS only announces what the button can do RIGHT NOW      ║
   ╚═══════════════════════════════════════════════════════════════╝
 */
 
-//
 // ── TYPES ──────────────────────────────────────────────────────
-//
 
-type FlowStep = "idle" | "scanning" | "description" | "confirm" | "quantity" | "added";
+type AppState =
+    | "setup"     // choosing mode
+    | "idle"      // ready to scan
+    | "scanning"  // camera active, waiting for product
+    | "scanned"   // product found, awaiting yes/no
+    | "quantity"  // counting how many to add
+    | "added";    // confirmation flash
 
-interface ScannedProduct {
+type InputMode = "button" | "voice" | null;
+
+interface Product {
     name: string;
     brand: string;
     price: number;
     currency: string;
-    description: string;
+    tts: string;
 }
 
 interface BasketItem {
-    product: ScannedProduct;
+    product: Product;
     qty: number;
 }
 
-// ── DEMO PRODUCTS (no Supabase needed) ────────────────────────
-const DEMO_PRODUCTS: ScannedProduct[] = [
-    { name: "Whole Milk 1L", brand: "Albert Heijn", price: 1.29, currency: "€", description: "Fresh whole milk, one litre carton. Albert Heijn brand. Price: one euro twenty-nine cents." },
-    { name: "Sliced Bread", brand: "Bolletje", price: 2.49, currency: "€", description: "Sliced wholemeal bread by Bolletje. Price: two euros forty-nine cents." },
-    { name: "Free-Range Eggs 10x", brand: "Jumbo", price: 3.19, currency: "€", description: "Pack of ten free-range eggs. Jumbo brand. Price: three euros nineteen cents." },
-    { name: "Bananas 1kg", brand: "Chiquita", price: 1.79, currency: "€", description: "One kilogram of Chiquita bananas. Price: one euro seventy-nine cents." },
-    { name: "Gouda Cheese 400g", brand: "Beemster", price: 4.99, currency: "€", description: "Beemster aged Gouda cheese. Four hundred grams. Price: four euros ninety-nine cents." },
-    { name: "Orange Juice 1.5L", brand: "Appelsientje", price: 2.89, currency: "€", description: "Appelsientje freshly squeezed orange juice. One and a half litres. Price: two euros eighty-nine cents." },
+// ── DEMO PRODUCTS ─────────────────────────────────────────────
+
+const DEMO_PRODUCTS: Product[] = [
+    { name: "Whole Milk 1L", brand: "Albert Heijn", price: 1.29, currency: "€", tts: "Whole milk, one litre, Albert Heijn, one euro twenty-nine cents." },
+    { name: "Sliced Bread", brand: "Bolletje", price: 2.49, currency: "€", tts: "Sliced wholemeal bread, Bolletje, two euros forty-nine cents." },
+    { name: "Free-Range Eggs 10x", brand: "Jumbo", price: 3.19, currency: "€", tts: "Ten free-range eggs, Jumbo, three euros nineteen cents." },
+    { name: "Bananas 1kg", brand: "Chiquita", price: 1.79, currency: "€", tts: "One kilogram of Chiquita bananas, one euro seventy-nine cents." },
+    { name: "Gouda Cheese 400g", brand: "Beemster", price: 4.99, currency: "€", tts: "Beemster Gouda cheese, four hundred grams, four euros ninety-nine cents." },
+    { name: "Orange Juice 1.5L", brand: "Appelsientje", price: 2.89, currency: "€", tts: "Appelsientje orange juice, one and a half litres, two euros eighty-nine cents." },
 ];
 
-function randomProduct(): ScannedProduct {
+function pickRandom(): Product {
     return DEMO_PRODUCTS[Math.floor(Math.random() * DEMO_PRODUCTS.length)];
 }
 
 // ── SPEECH RECOGNITION HOOK ───────────────────────────────────
+
+interface SpeechRecognitionInstance {
+    continuous: boolean;
+    interimResults: boolean;
+    lang: string;
+    onresult: ((e: SpeechRecognitionEvent) => void) | null;
+    onerror: (() => void) | null;
+    onend: (() => void) | null;
+    start: () => void;
+    stop: () => void;
+}
+
+type SpeechRecognitionConstructor = new () => SpeechRecognitionInstance;
+type WindowWithSR = Window & {
+    SpeechRecognition?: SpeechRecognitionConstructor;
+    webkitSpeechRecognition?: SpeechRecognitionConstructor;
+};
+
 function useSpeechRecognition() {
     const [listening, setListening] = useState(false);
     const [transcript, setTranscript] = useState("");
-    const recognitionRef = useRef<any>(null);
+    const recRef = useRef<SpeechRecognitionInstance | null>(null);
 
     const startListening = useCallback(() => {
-        const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+        const w = window as WindowWithSR;
+        const SR = w.SpeechRecognition || w.webkitSpeechRecognition;
         if (!SR) {
             toast.error("Speech recognition not supported in this browser");
             return;
@@ -79,19 +100,18 @@ function useSpeechRecognition() {
         rec.continuous = false;
         rec.interimResults = false;
         rec.lang = "en-US";
-        rec.onresult = (e: any) => {
-            const text = e.results[0][0].transcript;
-            setTranscript(text);
+        rec.onresult = (e: SpeechRecognitionEvent) => {
+            setTranscript(e.results[0][0].transcript);
         };
-        rec.onerror = () => { setListening(false); };
-        rec.onend = () => { setListening(false); };
-        recognitionRef.current = rec;
+        rec.onerror = () => setListening(false);
+        rec.onend = () => setListening(false);
+        recRef.current = rec;
         rec.start();
         setListening(true);
     }, []);
 
     const stopListening = useCallback(() => {
-        recognitionRef.current?.stop();
+        recRef.current?.stop();
         setListening(false);
     }, []);
 
@@ -104,18 +124,58 @@ function useSpeechRecognition() {
 
 export default function ShopPhone() {
     const videoRef = useRef<HTMLVideoElement>(null);
-    const canvasRef = useRef<HTMLCanvasElement>(null);
 
-    const [step, setStep] = useState<FlowStep>("idle");
-    const [cameraOn, setCameraOn] = useState(false);
-    const [product, setProduct] = useState<ScannedProduct | null>(null);
-    const [qty, setQty] = useState(1);
+    const [appState, setAppState] = useState<AppState>("setup");
+    const [inputMode, setInputMode] = useState<InputMode>(null);
+    const [product, setProduct] = useState<Product | null>(null);
     const [basket, setBasket] = useState<BasketItem[]>([]);
-    const [showBasket, setShowBasket] = useState(false);
+    const [cameraOn, setCameraOn] = useState(false);
+    const [isHolding, setIsHolding] = useState(false);
 
-    const { listening, transcript, startListening, stopListening, setTranscript } = useSpeechRecognition();
+    // Quantity counter (only used in "quantity" state)
+    const [qty, setQty] = useState(0);
+    const qtyRef = useRef(0);
+    const qtyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const QTY_CONFIRM_MS = 2500; // auto-add after 2.5 s of silence
 
-    // ── Camera ──────────────────────────────────────────────────
+    // Double-tap detection (for "no/skip" in "scanned" state)
+    const doubleTapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const DOUBLE_TAP_MS = 400; // window to detect double-tap
+
+    // Hold-press detection
+    const holdTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const holdFiredRef = useRef(false);
+    const HOLD_MS = 500;
+
+    const { listening, transcript, startListening, stopListening, setTranscript } =
+        useSpeechRecognition();
+
+    // Stable refs — read these inside timer callbacks to avoid stale closures
+    const appStateRef = useRef(appState);
+    const inputModeRef = useRef(inputMode);
+    const basketRef = useRef(basket);
+    const productRef = useRef(product);
+    useEffect(() => { appStateRef.current = appState; }, [appState]);
+    useEffect(() => { inputModeRef.current = inputMode; }, [inputMode]);
+    useEffect(() => { basketRef.current = basket; }, [basket]);
+    useEffect(() => { productRef.current = product; }, [product]);
+
+    // ── Welcome TTS on first mount ────────────────────────────
+    useEffect(() => {
+        const t = setTimeout(() => {
+            speak(
+                "Welcome to Shopper Buddy. " +
+                "Press once for button mode. " +
+                "Hold for voice mode."
+            );
+        }, 700);
+        return () => clearTimeout(t);
+    }, []);
+
+    // ── Cleanup ───────────────────────────────────────────────
+    useEffect(() => () => { stopSpeaking(); }, []);
+
+    // ── Camera ────────────────────────────────────────────────
     async function startCamera() {
         try {
             const stream = await navigator.mediaDevices.getUserMedia({
@@ -260,314 +320,376 @@ Format exactly as follows:
             setStep("description");
             speak(scanned.description + " Would you like to add this to your basket?");
         }
+        setCameraOn(true); // demo mode
     }
+}
 
-    /** STEP 2: Confirm add to basket */
-    function handleConfirmYes() {
-        setStep("quantity");
-        setQty(1);
-        speak("How many would you like to add?");
+// ── Read basket aloud ─────────────────────────────────────
+function readBasket() {
+    const b = basketRef.current;
+    if (b.length === 0) {
+        speak("Your basket is empty.");
+        return;
     }
+    const total = b.reduce((s, i) => s + i.product.price * i.qty, 0);
+    const itemNames = b.map(i => `${i.qty} ${i.product.name}`).join(", ");
+    speak(`Your basket: ${itemNames}. Total: ${total.toFixed(2)} euros.`);
+}
 
-    function handleConfirmNo() {
-        setStep("idle");
-        setProduct(null);
-        speak("Okay, product skipped. Ready to scan next product.");
-    }
-
-    /** Quantity step */
-    function handleQuantityDone() {
-        if (!product) return;
-        const existing = basket.find((b) => b.product.name === product.name);
-        if (existing) {
-            existing.qty += qty;
-            setBasket([...basket]);
-        } else {
-            setBasket([...basket, { product, qty }]);
-        }
-        setStep("added");
-        speak(`Added ${qty} ${product.name} to your basket. You now have ${basket.length + (existing ? 0 : 1)} items. Ready to scan next product.`);
-        setTimeout(() => {
-            setStep("idle");
-            setProduct(null);
-        }, 3000);
-    }
-
-    // ── Voice command processing ────────────────────────────────
-    useEffect(() => {
-        if (!transcript) return;
-        const lower = transcript.toLowerCase().trim();
-
-        if (step === "description" || step === "confirm") {
-            if (lower.includes("yes") || lower.includes("add") || lower.includes("yeah")) {
-                handleConfirmYes();
-            } else if (lower.includes("no") || lower.includes("skip") || lower.includes("nope")) {
-                handleConfirmNo();
-            }
-        } else if (step === "quantity") {
-            const num = parseInt(lower);
-            if (!isNaN(num) && num > 0 && num < 100) {
-                setQty(num);
-                setTimeout(() => handleQuantityDone(), 500);
-            }
-        } else if (step === "idle") {
-            if (lower.includes("scan") || lower.includes("product") || lower.includes("check")) {
-                handleScan();
-            } else if (lower.includes("basket") || lower.includes("cart")) {
-                setShowBasket(true);
-                const total = basket.reduce((s, b) => s + b.product.price * b.qty, 0);
-                speak(`Your basket has ${basket.length} items. Total: ${total.toFixed(2)} euros.`);
-            }
-        }
-        setTranscript("");
-    }, [transcript]);
-
-    // ── Basket total ────────────────────────────────────────────
-    const basketTotal = basket.reduce((s, b) => s + b.product.price * b.qty, 0);
-    const basketCount = basket.reduce((s, b) => s + b.qty, 0);
-
-    // ── Render ──────────────────────────────────────────────────
-    return (
-        <div className="shop-phone">
-            {/* ── Header ── */}
-            <header className="shop-phone__header">
-                <div className="shop-phone__logo">
-                    <div className="shop-phone__logo-icon">
-                        <Package size={24} />
-                    </div>
-                    <span className="shop-phone__title">Shopper Buddy</span>
-                </div>
-                <button
-                    className="shop-phone__basket-btn"
-                    onClick={() => {
-                        setShowBasket(!showBasket);
-                        if (!showBasket) {
-                            speak(`Your basket has ${basket.length} items totalling ${basketTotal.toFixed(2)} euros.`);
-                        }
-                    }}
-                    aria-label={`Basket: ${basketCount} items`}
-                >
-                    <ShoppingCart size={24} />
-                    {basketCount > 0 && <span className="shop-phone__badge">{basketCount}</span>}
-                </button>
-            </header>
-
-            {/* ── Camera viewfinder ── */}
-            <div className="shop-phone__viewfinder">
-                <video ref={videoRef} className="shop-phone__video" playsInline muted />
-                <canvas ref={canvasRef} style={{ display: "none" }} />
-
-                {!cameraOn && step === "idle" && (
-                    <div className="shop-phone__cam-overlay">
-                        <Camera size={56} strokeWidth={1.5} />
-                        <p>Tap the big button below to start scanning</p>
-                    </div>
-                )}
-
-                {step === "scanning" && (
-                    <div className="shop-phone__cam-overlay shop-phone__cam-overlay--scanning">
-                        <ScanBarcode size={64} className="scan-anim" />
-                        <p className="text-pulse">Scanning…</p>
-                    </div>
-                )}
-
-                {/* Scanning guide corners */}
-                {(cameraOn || step === "scanning") && (
-                    <div className="shop-phone__scan-frame">
-                        <span className="corner tl" />
-                        <span className="corner tr" />
-                        <span className="corner bl" />
-                        <span className="corner br" />
-                    </div>
-                )}
-            </div>
-
-            {/* ── Flow panels ── */}
-            <div className="shop-phone__panel-area">
-
-                {/* IDLE: Big scan button */}
-                {step === "idle" && !showBasket && (
-                    <div className="shop-phone__panel slide-up">
-                        <button
-                            className="shop-phone__big-btn shop-phone__big-btn--scan"
-                            onClick={handleScan}
-                            aria-label="Scan a product"
-                        >
-                            <ScanBarcode size={32} />
-                            <span>Scan Product</span>
-                        </button>
-                        <button
-                            className={`shop-phone__mic-btn ${listening ? "shop-phone__mic-btn--active" : ""}`}
-                            onMouseDown={startListening}
-                            onMouseUp={stopListening}
-                            onTouchStart={startListening}
-                            onTouchEnd={stopListening}
-                            aria-label="Hold to speak"
-                        >
-                            {listening ? <Mic size={28} /> : <MicOff size={28} />}
-                            <span>{listening ? "Listening…" : "Hold to speak"}</span>
-                        </button>
-                    </div>
-                )}
-
-                {/* DESCRIPTION: Show product and ask confirm */}
-                {(step === "description" || step === "confirm") && product && (
-                    <div className="shop-phone__panel slide-up">
-                        <div className="shop-phone__product-card">
-                            <div className="shop-phone__product-info">
-                                <h2>{product.name}</h2>
-                                <p className="shop-phone__product-brand">{product.brand}</p>
-                            </div>
-                            <div className="shop-phone__product-price">
-                                {product.currency}{product.price.toFixed(2)}
-                            </div>
-                        </div>
-
-                        <p className="shop-phone__question" aria-live="polite">
-                            Add to basket?
-                        </p>
-
-                        <div className="shop-phone__confirm-row">
-                            <button
-                                className="shop-phone__big-btn shop-phone__big-btn--yes"
-                                onClick={handleConfirmYes}
-                                aria-label="Yes, add to basket"
-                            >
-                                <Check size={36} />
-                                <span>Yes</span>
-                            </button>
-                            <button
-                                className="shop-phone__big-btn shop-phone__big-btn--no"
-                                onClick={handleConfirmNo}
-                                aria-label="No, skip product"
-                            >
-                                <X size={36} />
-                                <span>No</span>
-                            </button>
-                        </div>
-
-                        <button
-                            className={`shop-phone__mic-btn ${listening ? "shop-phone__mic-btn--active" : ""}`}
-                            onMouseDown={startListening}
-                            onMouseUp={stopListening}
-                            onTouchStart={startListening}
-                            onTouchEnd={stopListening}
-                            aria-label="Hold to answer with voice"
-                        >
-                            {listening ? <Mic size={24} /> : <Volume2 size={24} />}
-                            <span>{listening ? "Listening…" : "Or hold to answer"}</span>
-                        </button>
-                    </div>
-                )}
-
-                {/* QUANTITY: How many? */}
-                {step === "quantity" && product && (
-                    <div className="shop-phone__panel slide-up">
-                        <p className="shop-phone__question" aria-live="polite">
-                            How many <strong>{product.name}</strong>?
-                        </p>
-                        <div className="shop-phone__qty-row">
-                            <button
-                                className="shop-phone__qty-btn"
-                                onClick={() => setQty(Math.max(1, qty - 1))}
-                                aria-label="Decrease quantity"
-                            >
-                                <Minus size={32} />
-                            </button>
-                            <span className="shop-phone__qty-value" aria-live="polite">{qty}</span>
-                            <button
-                                className="shop-phone__qty-btn"
-                                onClick={() => setQty(qty + 1)}
-                                aria-label="Increase quantity"
-                            >
-                                <Plus size={32} />
-                            </button>
-                        </div>
-                        <button
-                            className="shop-phone__big-btn shop-phone__big-btn--yes"
-                            onClick={handleQuantityDone}
-                            aria-label={`Add ${qty} to basket`}
-                        >
-                            <ShoppingCart size={28} />
-                            <span>Add {qty} to basket</span>
-                        </button>
-
-                        <button
-                            className={`shop-phone__mic-btn ${listening ? "shop-phone__mic-btn--active" : ""}`}
-                            onMouseDown={startListening}
-                            onMouseUp={stopListening}
-                            onTouchStart={startListening}
-                            onTouchEnd={stopListening}
-                            aria-label="Hold to say quantity"
-                        >
-                            {listening ? <Mic size={24} /> : <Volume2 size={24} />}
-                            <span>{listening ? "Listening…" : "Or say the number"}</span>
-                        </button>
-                    </div>
-                )}
-
-                {/* ADDED: Confirmation */}
-                {step === "added" && product && (
-                    <div className="shop-phone__panel slide-up">
-                        <div className="shop-phone__success">
-                            <Check size={48} />
-                            <h2>Added to basket!</h2>
-                            <p>{qty}× {product.name}</p>
-                        </div>
-                    </div>
-                )}
-
-                {/* BASKET VIEW */}
-                {showBasket && step === "idle" && (
-                    <div className="shop-phone__panel slide-up">
-                        <div className="shop-phone__basket-header">
-                            <h2><ShoppingCart size={24} /> Your Basket</h2>
-                            <button onClick={() => setShowBasket(false)} aria-label="Close basket">
-                                <X size={28} />
-                            </button>
-                        </div>
-
-                        {basket.length === 0 ? (
-                            <p className="shop-phone__empty">Your basket is empty.<br />Scan a product to begin.</p>
-                        ) : (
-                            <>
-                                <ul className="shop-phone__basket-list">
-                                    {basket.map((b, i) => (
-                                        <li key={i} className="shop-phone__basket-item">
-                                            <div>
-                                                <strong>{b.product.name}</strong>
-                                                <span className="shop-phone__basket-brand">{b.product.brand}</span>
-                                            </div>
-                                            <div className="shop-phone__basket-right">
-                                                <span className="shop-phone__basket-qty">×{b.qty}</span>
-                                                <span className="shop-phone__basket-price">
-                                                    {b.product.currency}{(b.product.price * b.qty).toFixed(2)}
-                                                </span>
-                                            </div>
-                                        </li>
-                                    ))}
-                                </ul>
-                                <div className="shop-phone__basket-total">
-                                    <span>Total</span>
-                                    <span>€{basketTotal.toFixed(2)}</span>
-                                </div>
-                                <button
-                                    className="shop-phone__big-btn shop-phone__big-btn--scan"
-                                    onClick={() => {
-                                        setBasket([]);
-                                        setShowBasket(false);
-                                        speak("Basket cleared.");
-                                    }}
-                                    aria-label="Clear basket"
-                                >
-                                    <RotateCcw size={24} />
-                                    <span>Clear Basket</span>
-                                </button>
-                            </>
-                        )}
-                    </div>
-                )}
-            </div>
-        </div>
+// ── Scan ──────────────────────────────────────────────────
+async function doScan() {
+    setAppState("scanning");
+    speak("Scanning.");
+    if (!cameraOn) await startCamera();
+    await new Promise(r => setTimeout(r, 2000));
+    const p = pickRandom();
+    setProduct(p);
+    setAppState("scanned");
+    // Only explain what the user can do right now
+    speak(
+        `${p.tts} ` +
+        `Press once to add. Double tap to skip.`
     );
+}
+
+// ── Skip product (double-tap in scanned state) ────────────
+function doSkip() {
+    if (qtyTimerRef.current) { clearTimeout(qtyTimerRef.current); qtyTimerRef.current = null; }
+    if (doubleTapTimerRef.current) { clearTimeout(doubleTapTimerRef.current); doubleTapTimerRef.current = null; }
+    qtyRef.current = 0;
+    setQty(0);
+    setAppState("idle");
+    setProduct(null);
+    speak("Skipped.");
+}
+
+// ── Accept product (single-tap in scanned state) ──────────
+function doAccept() {
+    setAppState("quantity");
+    qtyRef.current = 0;
+    setQty(0);
+    // Only explain what the user can do right now
+    speak("How many? Tap to count. Hold to confirm.");
+}
+
+// ── Commit qty items to basket ────────────────────────────
+function doAddToBasket(count: number) {
+    const p = productRef.current;
+    if (!p || count < 1) return;
+
+    if (qtyTimerRef.current) { clearTimeout(qtyTimerRef.current); qtyTimerRef.current = null; }
+
+    setBasket(prev => {
+        const existing = prev.find(b => b.product.name === p.name);
+        if (existing) {
+            return prev.map(b =>
+                b.product.name === p.name ? { ...b, qty: b.qty + count } : b
+            );
+        }
+        return [...prev, { product: p, qty: count }];
+    });
+
+    qtyRef.current = 0;
+    setQty(0);
+    setAppState("added");
+    speak(`${count} ${p.name} added.`);
+
+    setTimeout(() => {
+        setAppState("idle");
+        setProduct(null);
+    }, 2000);
+}
+
+// ── Increment tap counter (quantity state) ────────────────
+function incrementQty() {
+    const next = qtyRef.current + 1;
+    qtyRef.current = next;
+    setQty(next);
+    speak(String(next)); // TTS: "One", "Two", "Three"…
+
+    // Reset auto-confirm countdown on every tap
+    if (qtyTimerRef.current) clearTimeout(qtyTimerRef.current);
+    qtyTimerRef.current = setTimeout(() => {
+        doAddToBasket(qtyRef.current);
+    }, QTY_CONFIRM_MS);
+}
+
+// ── SHORT PRESS handler (context-aware) ───────────────────
+function handleShortPress() {
+    const state = appStateRef.current;
+    const mode = inputModeRef.current;
+
+    // ── Setup: choose button mode ──
+    if (state === "setup") {
+        setInputMode("button");
+        setAppState("idle");
+        speak("Button mode. Press to scan. Hold to hear basket.");
+        return;
+    }
+
+    if (state === "added" || state === "scanning") return; // busy, ignore
+
+    if (mode === "button") {
+        if (state === "idle") {
+            doScan();
+
+        } else if (state === "scanned") {
+            // Double-tap detection:
+            // If a tap already happened within the window → double-tap = skip
+            if (doubleTapTimerRef.current) {
+                clearTimeout(doubleTapTimerRef.current);
+                doubleTapTimerRef.current = null;
+                doSkip();
+            } else {
+                // First tap — wait to see if a second arrives
+                doubleTapTimerRef.current = setTimeout(() => {
+                    doubleTapTimerRef.current = null;
+                    doAccept(); // single-tap confirmed → go to quantity
+                }, DOUBLE_TAP_MS);
+            }
+
+        } else if (state === "quantity") {
+            incrementQty();
+        }
+
+    } else if (mode === "voice") {
+        // In voice mode a tap also triggers the mic as a fallback
+        startListening();
+    }
+}
+
+// ── HOLD handler (context-aware) ──────────────────────────
+function handleHoldFire() {
+    const state = appStateRef.current;
+    const mode = inputModeRef.current;
+
+    // ── Setup: choose voice mode ──
+    if (state === "setup") {
+        setInputMode("voice");
+        setAppState("idle");
+        speak("Voice mode. Hold and speak. Release when done.");
+        return;
+    }
+
+    if (mode === "button") {
+        if (state === "quantity") {
+            // Hold during quantity = confirm immediately
+            if (qtyRef.current > 0) {
+                doAddToBasket(qtyRef.current);
+            } else {
+                // Nothing counted yet → cancel
+                if (qtyTimerRef.current) { clearTimeout(qtyTimerRef.current); qtyTimerRef.current = null; }
+                setAppState("idle");
+                setProduct(null);
+                speak("Cancelled.");
+            }
+        } else if (state === "scanned") {
+            // Cancel pending single-tap (they changed their mind and held instead)
+            if (doubleTapTimerRef.current) { clearTimeout(doubleTapTimerRef.current); doubleTapTimerRef.current = null; }
+            readBasket();
+        } else {
+            // idle, added, etc. → read basket
+            readBasket();
+        }
+    } else if (mode === "voice") {
+        setIsHolding(true);
+        startListening();
+    }
+}
+
+// ── Hold release ──────────────────────────────────────────
+function handleHoldRelease() {
+    if (inputModeRef.current === "voice") {
+        setIsHolding(false);
+        stopListening();
+    }
+}
+
+// ── Pointer events ────────────────────────────────────────
+function onPointerDown(e: React.PointerEvent) {
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    holdFiredRef.current = false;
+    holdTimerRef.current = setTimeout(() => {
+        holdFiredRef.current = true;
+        handleHoldFire();
+    }, HOLD_MS);
+}
+
+function onPointerUp() {
+    if (holdTimerRef.current) clearTimeout(holdTimerRef.current);
+    if (!holdFiredRef.current) {
+        handleShortPress();
+    } else {
+        handleHoldRelease();
+    }
+    holdFiredRef.current = false;
+}
+
+function onPointerCancel() {
+    if (holdTimerRef.current) clearTimeout(holdTimerRef.current);
+    if (holdFiredRef.current) handleHoldRelease();
+    holdFiredRef.current = false;
+}
+
+// ── Voice transcript processing ───────────────────────────
+useEffect(() => {
+    if (!transcript) return;
+    const lower = transcript.toLowerCase().trim();
+    const state = appStateRef.current;
+
+    if (state === "scanned") {
+        // User responded to "add to basket?"
+        const num = parseInt(lower);
+        if (!isNaN(num) && num > 0) {
+            // Said a specific number → accept with that quantity
+            doAddToBasket(num);
+        } else if (lower.includes("yes") || lower.includes("add") || lower.includes("yeah")) {
+            doAccept();
+        } else if (lower.includes("no") || lower.includes("skip") || lower.includes("nope")) {
+            doSkip();
+        }
+
+    } else if (state === "quantity") {
+        // User responded to "how many?"
+        const num = parseInt(lower);
+        if (!isNaN(num) && num > 0) {
+            doAddToBasket(num);
+        } else if (lower.includes("done") || lower.includes("confirm") || lower.includes("yes")) {
+            doAddToBasket(qtyRef.current);
+        } else if (lower.includes("cancel") || lower.includes("no") || lower.includes("skip")) {
+            if (qtyTimerRef.current) { clearTimeout(qtyTimerRef.current); qtyTimerRef.current = null; }
+            qtyRef.current = 0;
+            setQty(0);
+            setAppState("idle");
+            setProduct(null);
+            speak("Cancelled.");
+        }
+
+    } else if (state === "idle") {
+        if (lower.includes("scan") || lower.includes("product")) {
+            doScan();
+        } else if (lower.includes("basket") || lower.includes("cart") || lower.includes("total")) {
+            readBasket();
+        }
+    }
+
+    setTranscript("");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [transcript]);
+
+// ── Derived values ────────────────────────────────────────
+const basketTotal = basket.reduce((s, b) => s + b.product.price * b.qty, 0);
+const basketCount = basket.reduce((s, b) => s + b.qty, 0);
+
+// Button colour reflects current state
+const btnClass = [
+    "shop-phone__main-btn",
+    appState === "added" ? "shop-phone__main-btn--success" :
+        (isHolding || listening) ? "shop-phone__main-btn--listening" :
+            appState === "scanning" ? "shop-phone__main-btn--scanning" :
+                appState === "quantity" ? "shop-phone__main-btn--quantity" :
+                    "shop-phone__main-btn--idle",
+].join(" ");
+
+// ── Render ────────────────────────────────────────────────
+return (
+    <div className="shop-phone">
+
+        {/* ══ TOP 70%: camera + minimal info ══ */}
+        <div className="shop-phone__top">
+
+            <video ref={videoRef} className="shop-phone__video" playsInline muted />
+
+            {/* Header */}
+            <div className="shop-phone__header">
+                <div className="shop-phone__logo">
+                    <div className="shop-phone__logo-icon"><Package size={18} /></div>
+                    <span className="shop-phone__logo-name">Shopper Buddy</span>
+                </div>
+                {basketCount > 0 && (
+                    <div className="shop-phone__basket-pill" aria-label={`${basketCount} items`}>
+                        <ShoppingCart size={16} />
+                        <span>{basketCount}</span>
+                        <span className="shop-phone__basket-total-pill">€{basketTotal.toFixed(2)}</span>
+                    </div>
+                )}
+            </div>
+
+            {/* Setup: logo glow */}
+            {appState === "setup" && (
+                <div className="shop-phone__overlay">
+                    <div className="shop-phone__setup-icon">
+                        <Package size={64} strokeWidth={1.2} />
+                    </div>
+                </div>
+            )}
+
+            {/* Scanning */}
+            {appState === "scanning" && (
+                <div className="shop-phone__overlay shop-phone__overlay--scanning">
+                    <ScanBarcode size={72} className="scan-anim" />
+                </div>
+            )}
+
+            {/* Product info — shown while scanned / counting / added */}
+            {(appState === "scanned" || appState === "quantity" || appState === "added") && product && (
+                <div className={`shop-phone__product-overlay ${appState === "added" ? "shop-phone__product-overlay--added" :
+                    appState === "quantity" ? "shop-phone__product-overlay--quantity" :
+                        ""
+                    }`}>
+                    {appState === "added" && (
+                        <div className="shop-phone__check-circle">
+                            <Check size={36} strokeWidth={3} />
+                        </div>
+                    )}
+                    {appState === "quantity" && (
+                        <div className="shop-phone__qty-counter" aria-live="polite" key={qty}>
+                            {qty === 0 ? "?" : qty}
+                        </div>
+                    )}
+                    <div className="shop-phone__product-name">{product.name}</div>
+                    <div className="shop-phone__product-brand">{product.brand}</div>
+                    <div className="shop-phone__product-price">
+                        {product.currency}{product.price.toFixed(2)}
+                    </div>
+                </div>
+            )}
+
+            {/* Scan frame corners */}
+            {cameraOn && (appState === "idle" || appState === "scanning") && (
+                <div className="shop-phone__scan-frame">
+                    <span className="corner tl" />
+                    <span className="corner tr" />
+                    <span className="corner bl" />
+                    <span className="corner br" />
+                </div>
+            )}
+
+            {/* Listening dots */}
+            {listening && (
+                <div className="shop-phone__listening-bar" aria-live="polite">
+                    <div className="shop-phone__listening-dot" />
+                    <div className="shop-phone__listening-dot" />
+                    <div className="shop-phone__listening-dot" />
+                </div>
+            )}
+        </div>
+
+        {/* ══ BOTTOM 30%: THE one big button ══ */}
+        <div className="shop-phone__action-bar">
+            <button
+                id="main-btn"
+                className={btnClass}
+                onPointerDown={onPointerDown}
+                onPointerUp={onPointerUp}
+                onPointerCancel={onPointerCancel}
+                onPointerLeave={onPointerCancel}
+                aria-label="Main action button"
+                style={{ touchAction: "none" }}
+            >
+                <span className="shop-phone__main-btn-glow" />
+            </button>
+        </div>
+    </div>
+);
 }
