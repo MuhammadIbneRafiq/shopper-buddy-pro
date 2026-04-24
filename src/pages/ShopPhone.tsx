@@ -1,32 +1,32 @@
-import { useEffect, useRef, useState, useCallback } from "react";
+﻿import { useEffect, useRef, useState, useCallback } from "react";
 import { ShoppingCart, Package, ScanBarcode, Check } from "lucide-react";
 import { speak, stopSpeaking } from "@/lib/speech";
 import { bunq } from "@/lib/bunq";
 import { toast } from "sonner";
 
 /*
-  ╔═══════════════════════════════════════════════════════════════╗
-  ║  SHOPPER BUDDY — Flow (from whiteboard)                     ║
-  ║                                                             ║
-  ║  1. Scan  →  TTS: product description                       ║
-  ║  2. "Add to basket?"                                        ║
-  ║       Single tap  = YES  →  "How many?"                     ║
-  ║       Double tap  = NO   →  skip, back to scan              ║
-  ║  3. Tap N times   = quantity  (TTS speaks each number)      ║
-  ║     2.5 s silence = auto-add                                ║
-  ║     Hold          = add immediately                         ║
-  ║  4. Back to scan                                            ║
-  ║                                                             ║
-  ║  Setup  (first launch):                                     ║
-  ║    Single tap = button mode                                 ║
-  ║    Hold       = voice mode                                  ║
-  ║                                                             ║
-  ║  "Explain only available functions"                         ║
-  ║  → TTS only announces what the button can do RIGHT NOW      ║
-  ╚═══════════════════════════════════════════════════════════════╝
+  â•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—
+  â•‘  SHOPPER BUDDY â€” Flow (from whiteboard)                     â•‘
+  â•‘                                                             â•‘
+  â•‘  1. Scan  â†’  TTS: product description                       â•‘
+  â•‘  2. "Add to basket?"                                        â•‘
+  â•‘       Single tap  = YES  â†’  "How many?"                     â•‘
+  â•‘       Double tap  = NO   â†’  skip, back to scan              â•‘
+  â•‘  3. Tap N times   = quantity  (TTS speaks each number)      â•‘
+  â•‘     2.5 s silence = auto-add                                â•‘
+  â•‘     Hold          = add immediately                         â•‘
+  â•‘  4. Back to scan                                            â•‘
+  â•‘                                                             â•‘
+  â•‘  Setup  (first launch):                                     â•‘
+  â•‘    Single tap = button mode                                 â•‘
+  â•‘    Hold       = voice mode                                  â•‘
+  â•‘                                                             â•‘
+  â•‘  "Explain only available functions"                         â•‘
+  â•‘  â†’ TTS only announces what the button can do RIGHT NOW      â•‘
+  â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 */
 
-// ── TYPES ──────────────────────────────────────────────────────
+// â”€â”€ TYPES â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 type AppState =
     | "setup"     // choosing mode
@@ -53,22 +53,22 @@ interface BasketItem {
     qty: number;
 }
 
-// ── DEMO PRODUCTS ─────────────────────────────────────────────
+// â”€â”€ DEMO PRODUCTS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 const DEMO_PRODUCTS: Product[] = [
-    { name: "Whole Milk 1L", brand: "Albert Heijn", price: 1.29, currency: "€", tts: "Whole milk, one litre, Albert Heijn, one euro twenty-nine cents." },
-    { name: "Sliced Bread", brand: "Bolletje", price: 2.49, currency: "€", tts: "Sliced wholemeal bread, Bolletje, two euros forty-nine cents." },
-    { name: "Free-Range Eggs 10x", brand: "Jumbo", price: 3.19, currency: "€", tts: "Ten free-range eggs, Jumbo, three euros nineteen cents." },
-    { name: "Bananas 1kg", brand: "Chiquita", price: 1.79, currency: "€", tts: "One kilogram of Chiquita bananas, one euro seventy-nine cents." },
-    { name: "Gouda Cheese 400g", brand: "Beemster", price: 4.99, currency: "€", tts: "Beemster Gouda cheese, four hundred grams, four euros ninety-nine cents." },
-    { name: "Orange Juice 1.5L", brand: "Appelsientje", price: 2.89, currency: "€", tts: "Appelsientje orange juice, one and a half litres, two euros eighty-nine cents." },
+    { name: "Whole Milk 1L", brand: "Albert Heijn", price: 1.29, currency: "â‚¬", tts: "Whole milk, one litre, Albert Heijn, one euro twenty-nine cents." },
+    { name: "Sliced Bread", brand: "Bolletje", price: 2.49, currency: "â‚¬", tts: "Sliced wholemeal bread, Bolletje, two euros forty-nine cents." },
+    { name: "Free-Range Eggs 10x", brand: "Jumbo", price: 3.19, currency: "â‚¬", tts: "Ten free-range eggs, Jumbo, three euros nineteen cents." },
+    { name: "Bananas 1kg", brand: "Chiquita", price: 1.79, currency: "â‚¬", tts: "One kilogram of Chiquita bananas, one euro seventy-nine cents." },
+    { name: "Gouda Cheese 400g", brand: "Beemster", price: 4.99, currency: "â‚¬", tts: "Beemster Gouda cheese, four hundred grams, four euros ninety-nine cents." },
+    { name: "Orange Juice 1.5L", brand: "Appelsientje", price: 2.89, currency: "â‚¬", tts: "Appelsientje orange juice, one and a half litres, two euros eighty-nine cents." },
 ];
 
 function randomProduct(): Product {
     return DEMO_PRODUCTS[Math.floor(Math.random() * DEMO_PRODUCTS.length)];
 }
 
-// ── SPEECH RECOGNITION HOOK ───────────────────────────────────
+// â”€â”€ SPEECH RECOGNITION HOOK â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 interface SpeechRecognitionInstance {
     continuous: boolean;
@@ -121,9 +121,9 @@ function useSpeechRecognition() {
     return { listening, transcript, startListening, stopListening, setTranscript };
 }
 
-// ═══════════════════════════════════════════════════════════════
-// ── MAIN COMPONENT ────────────────────────────────────────────
-// ═══════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// â”€â”€ MAIN COMPONENT â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 export default function ShopPhone() {
     const videoRef = useRef<HTMLVideoElement>(null);
@@ -154,7 +154,7 @@ export default function ShopPhone() {
     const { listening, transcript, startListening, stopListening, setTranscript } =
         useSpeechRecognition();
 
-    // Stable refs — read these inside timer callbacks to avoid stale closures
+    // Stable refs â€” read these inside timer callbacks to avoid stale closures
     const appStateRef = useRef(appState);
     const inputModeRef = useRef(inputMode);
     const basketRef = useRef(basket);
@@ -174,26 +174,11 @@ export default function ShopPhone() {
         return () => { cancelled = true; clearTimeout(t); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
-    /* REPLACED ORIGINAL WELCOME EFFECT BELOW — kept for reference
 
-    // ── Welcome TTS on first mount ────────────────────────────
-    useEffect(() => {
-        const t = setTimeout(() => {
-            speak(
-                "Welcome to Shopper Buddy. " +
-                "Press once for button mode. " +
-                "Hold for voice mode."
-            );
-        }, 700);
-        return () => clearTimeout(t);
-    */
-
-    }, []);
-
-    // ── Cleanup ───────────────────────────────────────────────
+    // â”€â”€ Cleanup â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     useEffect(() => () => { stopSpeaking(); }, []);
 
-    // ── Camera ────────────────────────────────────────────────
+    // â”€â”€ Camera â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     async function startCamera() {
         try {
             const stream = await navigator.mediaDevices.getUserMedia({
@@ -205,7 +190,7 @@ export default function ShopPhone() {
             }
             setCameraOn(true);
         } catch {
-            toast.message("Camera unavailable — using demo mode");
+            toast.message("Camera unavailable â€” using demo mode");
             setCameraOn(true);
         }
     }
@@ -218,7 +203,7 @@ export default function ShopPhone() {
 
     useEffect(() => () => { stopSpeaking(); stopCamera(); }, []);
 
-    // ── Step handlers ───────────────────────────────────────────
+    // â”€â”€ Step handlers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     /** STEP 1: Scan product (press button once) */
     async function handleScan() {
@@ -275,7 +260,7 @@ Format exactly as follows:
   "name": "Short name of what you see (or 'Unknown')",
   "brand": "Brand or 'N/A'",
   "price": 0.00,
-  "currency": "€",
+  "currency": "â‚¬",
   "tts": "Clear description of what you see so the user knows what they are pointing at."
 } `
                         }
@@ -320,7 +305,7 @@ Format exactly as follows:
                     name: "Unrecognized Item",
                     brand: "Unknown",
                     price: 0,
-                    currency: "€",
+                    currency: "â‚¬",
                     tts: jsonStr.replace(/"/g, '').substring(0, 200)
                 };
             }
@@ -344,7 +329,7 @@ Format exactly as follows:
     // REMOVED PREMATURE CLOSING BRACE HERE
 
 
-    // ── Read basket aloud ─────────────────────────────────────
+    // â”€â”€ Read basket aloud â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     function readBasket() {
         const b = basketRef.current;
         if (b.length === 0) {
@@ -357,7 +342,7 @@ Format exactly as follows:
         setAppState("checkout");
     }
 
-    // ── Bunq Payment ──────────────────────────────────────────
+    // â”€â”€ Bunq Payment â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     async function doPayment() {
         const total = basketRef.current.reduce((s, i) => s + i.product.price * i.qty, 0);
         if (total === 0) {
@@ -386,12 +371,12 @@ Format exactly as follows:
         }
     }
 
-    // ── Scan ──────────────────────────────────────────────────
+    // â”€â”€ Scan â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     async function doScan() {
         await handleScan();
     }
 
-    // ── Skip product (double-tap in scanned state) ────────────
+    // â”€â”€ Skip product (double-tap in scanned state) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     function doSkip() {
         if (qtyTimerRef.current) { clearTimeout(qtyTimerRef.current); qtyTimerRef.current = null; }
         if (doubleTapTimerRef.current) { clearTimeout(doubleTapTimerRef.current); doubleTapTimerRef.current = null; }
@@ -402,7 +387,7 @@ Format exactly as follows:
         speak("Skipped.");
     }
 
-    // ── Accept product (single-tap in scanned state) ──────────
+    // â”€â”€ Accept product (single-tap in scanned state) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     function doAccept() {
         setAppState("quantity");
         qtyRef.current = 0;
@@ -411,7 +396,7 @@ Format exactly as follows:
         speak("How many? Tap to count. Hold to confirm.");
     }
 
-    // ── Commit qty items to basket ────────────────────────────
+    // â”€â”€ Commit qty items to basket â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     function doAddToBasket(count: number) {
         const p = productRef.current;
         if (!p || count < 1) return;
@@ -439,12 +424,12 @@ Format exactly as follows:
         }, 2000);
     }
 
-    // ── Increment tap counter (quantity state) ────────────────
+    // â”€â”€ Increment tap counter (quantity state) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     function incrementQty() {
         const next = qtyRef.current + 1;
         qtyRef.current = next;
         setQty(next);
-        speak(String(next)); // TTS: "One", "Two", "Three"…
+        speak(String(next)); // TTS: "One", "Two", "Three"â€¦
 
         // Reset auto-confirm countdown on every tap
         if (qtyTimerRef.current) clearTimeout(qtyTimerRef.current);
@@ -453,12 +438,12 @@ Format exactly as follows:
         }, QTY_CONFIRM_MS);
     }
 
-    // ── SHORT PRESS handler (context-aware) ───────────────────
+    // â”€â”€ SHORT PRESS handler (context-aware) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     function handleShortPress() {
         const state = appStateRef.current;
         const mode = inputModeRef.current;
 
-        // ── Setup: choose button mode ──
+        // â”€â”€ Setup: choose button mode â”€â”€
         if (state === "setup") {
             setInputMode("button");
             setAppState("idle");
@@ -474,16 +459,16 @@ Format exactly as follows:
 
             } else if (state === "scanned") {
                 // Double-tap detection:
-                // If a tap already happened within the window → double-tap = skip
+                // If a tap already happened within the window â†’ double-tap = skip
                 if (doubleTapTimerRef.current) {
                     clearTimeout(doubleTapTimerRef.current);
                     doubleTapTimerRef.current = null;
                     doSkip();
                 } else {
-                    // First tap — wait to see if a second arrives
+                    // First tap â€” wait to see if a second arrives
                     doubleTapTimerRef.current = setTimeout(() => {
                         doubleTapTimerRef.current = null;
-                        doAccept(); // single-tap confirmed → go to quantity
+                        doAccept(); // single-tap confirmed â†’ go to quantity
                     }, DOUBLE_TAP_MS);
                 }
 
@@ -499,12 +484,12 @@ Format exactly as follows:
         }
     }
 
-    // ── HOLD handler (context-aware) ──────────────────────────
+    // â”€â”€ HOLD handler (context-aware) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     function handleHoldFire() {
         const state = appStateRef.current;
         const mode = inputModeRef.current;
 
-        // ── Setup: choose voice mode ──
+        // â”€â”€ Setup: choose voice mode â”€â”€
         if (state === "setup") {
             setInputMode("voice");
             setAppState("idle");
@@ -518,7 +503,7 @@ Format exactly as follows:
                 if (qtyRef.current > 0) {
                     doAddToBasket(qtyRef.current);
                 } else {
-                    // Nothing counted yet → cancel
+                    // Nothing counted yet â†’ cancel
                     if (qtyTimerRef.current) { clearTimeout(qtyTimerRef.current); qtyTimerRef.current = null; }
                     setAppState("idle");
                     setProduct(null);
@@ -529,7 +514,7 @@ Format exactly as follows:
                 if (doubleTapTimerRef.current) { clearTimeout(doubleTapTimerRef.current); doubleTapTimerRef.current = null; }
                 readBasket();
             } else {
-                // idle, added, etc. → read basket
+                // idle, added, etc. â†’ read basket
                 readBasket();
             }
         } else if (mode === "voice") {
@@ -538,7 +523,7 @@ Format exactly as follows:
         }
     }
 
-    // ── Hold release ──────────────────────────────────────────
+    // â”€â”€ Hold release â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     function handleHoldRelease() {
         if (inputModeRef.current === "voice") {
             setIsHolding(false);
@@ -546,7 +531,7 @@ Format exactly as follows:
         }
     }
 
-    // ── Pointer events ────────────────────────────────────────
+    // â”€â”€ Pointer events â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     function onPointerDown(e: React.PointerEvent) {
         (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
         holdFiredRef.current = false;
@@ -572,12 +557,12 @@ Format exactly as follows:
         holdFiredRef.current = false;
     }
 
-    // ── Voice transcript processing ───────────────────────────
+    // â”€â”€ Voice transcript processing â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     useEffect(() => {
         if (!transcript) return;
         const lower = transcript.toLowerCase().trim();
         const state = appStateRef.current;
-        // ── Setup: voice picks mode ──
+        // â”€â”€ Setup: voice picks mode â”€â”€
         if (state === "setup") {
             if (lower.includes("voice")) {
                 setInputMode("voice");
@@ -588,7 +573,7 @@ Format exactly as follows:
                 setAppState("idle");
                 speak("Button mode selected. Press the big button to scan.");
             } else {
-                // Didn't understand — ask again
+                // Didn't understand â€” ask again
                 speak("Say button or voice.").then(() => startListening());
             }
             setTranscript("");
@@ -601,7 +586,7 @@ Format exactly as follows:
             // User responded to "add to basket?"
             const num = parseInt(lower);
             if (!isNaN(num) && num > 0) {
-                // Said a specific number → accept with that quantity
+                // Said a specific number â†’ accept with that quantity
                 doAddToBasket(num);
             } else if (lower.includes("yes") || lower.includes("add") || lower.includes("yeah")) {
                 doAccept();
@@ -652,7 +637,7 @@ Format exactly as follows:
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [transcript]);
 
-    // ── Derived values ────────────────────────────────────────
+    // â”€â”€ Derived values â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     const basketTotal = basket.reduce((s, b) => s + b.product.price * b.qty, 0);
     const basketCount = basket.reduce((s, b) => s + b.qty, 0);
 
@@ -667,11 +652,11 @@ Format exactly as follows:
                             "shop-phone__main-btn--idle",
     ].join(" ");
 
-    // ── Render ────────────────────────────────────────────────
+    // â”€â”€ Render â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     return (
         <div className="shop-phone">
 
-            {/* ══ TOP 70%: camera + minimal info ══ */}
+            {/* â•â• TOP 70%: camera + minimal info â•â• */}
             <div className="shop-phone__top">
 
                 <video ref={videoRef} className="shop-phone__video" playsInline muted />
@@ -687,7 +672,7 @@ Format exactly as follows:
                         <div className="shop-phone__basket-pill" aria-label={`${basketCount} items`}>
                             <ShoppingCart size={16} />
                             <span>{basketCount}</span>
-                            <span className="shop-phone__basket-total-pill">€{basketTotal.toFixed(2)}</span>
+                            <span className="shop-phone__basket-total-pill">â‚¬{basketTotal.toFixed(2)}</span>
                         </div>
                     )}
                 </div>
@@ -708,7 +693,7 @@ Format exactly as follows:
                     </div>
                 )}
 
-                {/* Product info — shown while scanned / counting / added */}
+                {/* Product info â€” shown while scanned / counting / added */}
                 {(appState === "scanned" || appState === "quantity" || appState === "added") && product && (
                     <div className={`shop-phone__product-overlay ${appState === "added" ? "shop-phone__product-overlay--added" :
                         appState === "quantity" ? "shop-phone__product-overlay--quantity" :
@@ -752,7 +737,7 @@ Format exactly as follows:
                 )}
             </div>
 
-            {/* ══ BOTTOM 30%: THE one big button ══ */}
+            {/* â•â• BOTTOM 30%: THE one big button â•â• */}
             <div className="shop-phone__action-bar">
                 <button
                     id="main-btn"
