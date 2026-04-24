@@ -14,16 +14,345 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      grocery_budgets: {
+        Row: {
+          created_at: string
+          currency: string
+          id: string
+          monthly_limit: number
+          period_start: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          currency?: string
+          id?: string
+          monthly_limit?: number
+          period_start?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          currency?: string
+          id?: string
+          monthly_limit?: number
+          period_start?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      helper_requests: {
+        Row: {
+          ai_summary: string | null
+          answered_at: string | null
+          created_at: string
+          helper_response: string | null
+          helper_user_id: string | null
+          id: string
+          image_url: string | null
+          kind: Database["public"]["Enums"]["request_kind"]
+          primary_user_id: string
+          question: string | null
+          status: Database["public"]["Enums"]["request_status"]
+          whatsapp_sent: boolean
+        }
+        Insert: {
+          ai_summary?: string | null
+          answered_at?: string | null
+          created_at?: string
+          helper_response?: string | null
+          helper_user_id?: string | null
+          id?: string
+          image_url?: string | null
+          kind?: Database["public"]["Enums"]["request_kind"]
+          primary_user_id: string
+          question?: string | null
+          status?: Database["public"]["Enums"]["request_status"]
+          whatsapp_sent?: boolean
+        }
+        Update: {
+          ai_summary?: string | null
+          answered_at?: string | null
+          created_at?: string
+          helper_response?: string | null
+          helper_user_id?: string | null
+          id?: string
+          image_url?: string | null
+          kind?: Database["public"]["Enums"]["request_kind"]
+          primary_user_id?: string
+          question?: string | null
+          status?: Database["public"]["Enums"]["request_status"]
+          whatsapp_sent?: boolean
+        }
+        Relationships: []
+      }
+      joint_accounts: {
+        Row: {
+          created_at: string
+          helper_email: string | null
+          helper_user_id: string
+          id: string
+          primary_user_id: string
+        }
+        Insert: {
+          created_at?: string
+          helper_email?: string | null
+          helper_user_id: string
+          id?: string
+          primary_user_id: string
+        }
+        Update: {
+          created_at?: string
+          helper_email?: string | null
+          helper_user_id?: string
+          id?: string
+          primary_user_id?: string
+        }
+        Relationships: []
+      }
+      price_history: {
+        Row: {
+          currency: string
+          id: string
+          observed_at: string
+          price: number
+          product_id: string | null
+          product_name: string
+          store: string | null
+        }
+        Insert: {
+          currency?: string
+          id?: string
+          observed_at?: string
+          price: number
+          product_id?: string | null
+          product_name: string
+          store?: string | null
+        }
+        Update: {
+          currency?: string
+          id?: string
+          observed_at?: string
+          price?: number
+          product_id?: string | null
+          product_name?: string
+          store?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "price_history_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      product_categories: {
+        Row: {
+          child: string
+          id: string
+          parent: string
+        }
+        Insert: {
+          child: string
+          id?: string
+          parent: string
+        }
+        Update: {
+          child?: string
+          id?: string
+          parent?: string
+        }
+        Relationships: []
+      }
+      products: {
+        Row: {
+          attributes: Json
+          brand: string | null
+          category: string | null
+          created_at: string
+          currency: string
+          id: string
+          name: string
+          typical_price: number | null
+        }
+        Insert: {
+          attributes?: Json
+          brand?: string | null
+          category?: string | null
+          created_at?: string
+          currency?: string
+          id?: string
+          name: string
+          typical_price?: number | null
+        }
+        Update: {
+          attributes?: Json
+          brand?: string | null
+          category?: string | null
+          created_at?: string
+          currency?: string
+          id?: string
+          name?: string
+          typical_price?: number | null
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          created_at: string
+          display_name: string | null
+          font_scale: number
+          high_contrast: boolean
+          id: string
+          phone: string | null
+          preferred_voice: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          display_name?: string | null
+          font_scale?: number
+          high_contrast?: boolean
+          id: string
+          phone?: string | null
+          preferred_voice?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          display_name?: string | null
+          font_scale?: number
+          high_contrast?: boolean
+          id?: string
+          phone?: string | null
+          preferred_voice?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      receipts: {
+        Row: {
+          created_at: string
+          currency: string
+          id: string
+          image_url: string | null
+          line_items: Json
+          occurred_at: string
+          store: string | null
+          total: number | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          currency?: string
+          id?: string
+          image_url?: string | null
+          line_items?: Json
+          occurred_at?: string
+          store?: string | null
+          total?: number | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          currency?: string
+          id?: string
+          image_url?: string | null
+          line_items?: Json
+          occurred_at?: string
+          store?: string | null
+          total?: number | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      transactions: {
+        Row: {
+          amount: number
+          category: string
+          created_at: string
+          currency: string
+          id: string
+          merchant: string
+          occurred_at: string
+          source: string
+          user_id: string
+        }
+        Insert: {
+          amount: number
+          category?: string
+          created_at?: string
+          currency?: string
+          id?: string
+          merchant: string
+          occurred_at?: string
+          source?: string
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          category?: string
+          created_at?: string
+          currency?: string
+          id?: string
+          merchant?: string
+          occurred_at?: string
+          source?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_roles: {
+        Row: {
+          created_at: string
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
+      is_helper_of: {
+        Args: { _helper: string; _primary: string }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "visually_impaired" | "helper" | "admin"
+      request_kind:
+        | "product_check"
+        | "price_check"
+        | "receipt_check"
+        | "general"
+      request_status: "pending" | "answered" | "dismissed"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +479,15 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["visually_impaired", "helper", "admin"],
+      request_kind: [
+        "product_check",
+        "price_check",
+        "receipt_check",
+        "general",
+      ],
+      request_status: ["pending", "answered", "dismissed"],
+    },
   },
 } as const
