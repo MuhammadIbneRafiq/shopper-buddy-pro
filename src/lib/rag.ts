@@ -54,8 +54,13 @@ function localFuzzyMatch(query: string): DutchProduct | null {
  * find the best matching Dutch supermarket product with real price.
  */
 export async function ragLookup(rawProduct: { name: string; brand: string; description: string }): Promise<DutchProduct | null> {
+  console.log('[RAG] ragLookup input:', rawProduct);
   const creds = getCredentials();
-  if (!creds.accessKeyId) return localFuzzyMatch(`${rawProduct.name} ${rawProduct.brand}`);
+  if (!creds.accessKeyId) {
+    const fallback = localFuzzyMatch(`${rawProduct.name} ${rawProduct.brand}`);
+    console.log('[RAG] No credentials — fuzzy fallback result:', fallback?.id ?? 'null');
+    return fallback;
+  }
 
   try {
     const { BedrockRuntimeClient, ConverseCommand } = await import('@aws-sdk/client-bedrock-runtime');
@@ -79,8 +84,11 @@ Return ONLY the product ID (e.g. "ah-001") of the best match, or "none" if no ma
     }));
 
     const matchId = res.output?.message?.content?.[0]?.text?.trim().toLowerCase();
+    console.log('[RAG] Bedrock matched ID:', matchId);
     if (!matchId || matchId === 'none') return localFuzzyMatch(`${rawProduct.name} ${rawProduct.brand}`);
-    return catalog.find(p => p.id === matchId) ?? localFuzzyMatch(`${rawProduct.name} ${rawProduct.brand}`);
+    const product = catalog.find(p => p.id === matchId) ?? localFuzzyMatch(`${rawProduct.name} ${rawProduct.brand}`);
+    console.log('[RAG] Final product:', product?.id, product?.name, product?.price);
+    return product;
   } catch {
     return localFuzzyMatch(`${rawProduct.name} ${rawProduct.brand}`);
   }
@@ -112,7 +120,9 @@ export async function scanAndMatch(base64Image: string): Promise<DutchProduct & 
     try {
       const match = raw.replace(/```json|```/g, '').trim().match(/\{[\s\S]*\}/);
       parsed = JSON.parse(match?.[0] ?? raw);
+      console.log('[RAG] Vision identified:', parsed);
     } catch {
+      console.log('[RAG] Vision parse failed, raw:', raw.substring(0, 100));
       return null;
     }
 

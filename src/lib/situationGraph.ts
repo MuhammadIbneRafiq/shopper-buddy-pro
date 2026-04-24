@@ -150,8 +150,13 @@ const SITUATIONS: SituationNode[] = [
 export function evaluateSituation(ctx: ShopContext): SituationAction {
   const sorted = [...SITUATIONS].sort((a, b) => b.priority - a.priority);
   for (const node of sorted) {
-    if (node.matches(ctx)) return node.resolve(ctx);
+    if (node.matches(ctx)) {
+      const action = node.resolve(ctx);
+      console.log(`[SituationGraph] MATCH: ${node.id}`, { ctx, action });
+      return action;
+    }
   }
+  console.log('[SituationGraph] NO MATCH — returning none', ctx);
   return { speak: null, autoAdvance: false, action: 'none', urgency: 'low' };
 }
 
@@ -164,6 +169,7 @@ export function processVoiceInput(
   ctx: ShopContext
 ): { action: string; qty?: number } {
   const t = transcript.toLowerCase().trim();
+  console.log(`[SituationGraph] processVoiceInput — transcript: "${transcript}" | state: ${ctx.appState} | mode: ${ctx.inputMode}`);
 
   if (ctx.appState === 'setup') {
     if (t.includes('stem') || t.includes('voice') || t.includes('spraak')) return { action: 'set_voice' };
@@ -197,5 +203,7 @@ export function processVoiceInput(
     if (t.includes('annuleer') || t.includes('nee') || t.includes('terug')) return { action: 'cancel' };
   }
 
-  return { action: 'unknown' };
+  const result = { action: 'unknown' };
+  console.log(`[SituationGraph] processVoiceInput result:`, result);
+  return result;
 }
