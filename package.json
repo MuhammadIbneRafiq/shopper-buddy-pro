@@ -13,6 +13,11 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@aws-sdk/client-bedrock-agent": "^3.1037.0",
+    "@aws-sdk/client-bedrock-agent-runtime": "^3.1037.0",
+    "@aws-sdk/client-bedrock-runtime": "^3.1037.0",
+    "@aws-sdk/client-iam": "^3.1037.0",
+    "@aws-sdk/client-s3": "^3.1037.0",
     "@hookform/resolvers": "^3.10.0",
     "@radix-ui/react-accordion": "^1.2.11",
     "@radix-ui/react-alert-dialog": "^1.1.14",
