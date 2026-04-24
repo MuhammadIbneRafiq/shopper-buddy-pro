@@ -150,15 +150,99 @@ export default function ShopPhone() {
         setStep("scanning");
         speak("Scanning product. Please hold steady.");
 
-        // Simulate scanning delay
-        await new Promise((r) => setTimeout(r, 2000));
+        // Wait a brief moment to let the camera adjust
+        await new Promise((r) => setTimeout(r, 1000));
 
-        const scanned = randomProduct();
-        setProduct(scanned);
-        setStep("description");
+        let base64Image = "";
+        if (videoRef.current && canvasRef.current) {
+            const video = videoRef.current;
+            const canvas = canvasRef.current;
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            const ctx = canvas.getContext("2d");
+            if (ctx) {
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                base64Image = canvas.toDataURL("image/jpeg", 0.6).split(",")[1];
+            }
+        }
 
-        // Speak the product description
-        speak(scanned.description + " Would you like to add this to your basket?");
+        if (!base64Image) {
+            toast.error("Failed to capture image");
+            speak("Failed to capture image. Using demo product.");
+            const scanned = randomProduct();
+            setProduct(scanned);
+            setStep("description");
+            speak(scanned.description + " Would you like to add this to your basket?");
+            return;
+        }
+
+        try {
+            const token = import.meta.env.VITE_AWS_BEARER_TOKEN_BEDROCK;
+            if (!token) throw new Error("Missing AWS Bedrock Token in .env");
+
+            const response = await fetch("https://bedrock-runtime.us-east-1.amazonaws.com/model/anthropic.claude-3-haiku-20240307-v1:0/converse", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${token}`
+                },
+                body: JSON.stringify({
+                    messages: [
+                        {
+                            role: "user",
+                            content: [
+                                {
+                                    image: {
+                                        format: "jpeg",
+                                        source: { bytes: base64Image }
+                                    }
+                                },
+                                {
+                                    text: `You are an AI assistant helping a visually impaired user shop for groceries. You receive an image of a product from a phone camera. 
+Respond ONLY with a valid JSON object in the exact following format, with no markdown formatting or extra text:
+{
+  "name": "Product Name",
+  "brand": "Brand Name",
+  "price": 0.00,
+  "currency": "€",
+  "description": "Short, highly descriptive text describing the product, its size/weight, brand, and a reasonable estimated price. Sound natural."
+}
+If you cannot identify the exact product, provide a helpful general description and make a reasonable guess. DO NOT wrap the JSON in markdown code blocks like \`\`\`json.`
+                                }
+                            ]
+                        }
+                    ]
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error("Bedrock API Error: " + response.status);
+            }
+
+            const data = await response.json();
+            const jsonStr = data.output.message.content[0].text;
+            let scanned: ScannedProduct;
+            try {
+                scanned = JSON.parse(jsonStr);
+            } catch (e) {
+                // remove any accidental markdown backticks just in case
+                const cleaned = jsonStr.replace(/```json/g, '').replace(/```/g, '').trim();
+                scanned = JSON.parse(cleaned);
+            }
+
+            setProduct(scanned);
+            setStep("description");
+
+            // Speak the product description
+            speak(scanned.description + " Would you like to add this to your basket?");
+        } catch (e) {
+            console.error("Scan error:", e);
+            speak("Sorry, I had trouble analyzing the image. Using demo product.");
+            const scanned = randomProduct();
+            setProduct(scanned);
+            setStep("description");
+            speak(scanned.description + " Would you like to add this to your basket?");
+        }
     }
 
     /** STEP 2: Confirm add to basket */
