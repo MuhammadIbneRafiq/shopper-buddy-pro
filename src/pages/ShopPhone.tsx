@@ -1,4 +1,4 @@
-﻿import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { scanAndMatch } from "@/lib/rag";
 import { evaluateSituation, processVoiceInput } from "@/lib/situationGraph";
 import { ShoppingCart, Package, ScanBarcode, Check } from "lucide-react";
@@ -175,13 +175,13 @@ export default function ShopPhone() {
             if (!cancelled) startListening();
         }, 700);
         return () => { cancelled = true; clearTimeout(t); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
 
     // Load BUNQ balance on mount for situation graph
     useEffect(() => {
-        bunq.getBalance().then(b => setBalance(parseFloat(b))).catch(() => {});
+        bunq.getBalance().then(b => setBalance(parseFloat(b))).catch(() => { });
     }, []);
     // â”€â”€ Cleanup â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     useEffect(() => () => { stopSpeaking(); }, []);
@@ -214,7 +214,7 @@ export default function ShopPhone() {
     // â”€â”€ Step handlers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     async function handleScan() {
-    /** STEP 1: Scan product (press button once) */
+        /** STEP 1: Scan product (press button once) */
         if (!cameraOn) await startCamera();
         setAppState("scanning");
         speak("Scanning product. Please hold steady.");
@@ -229,28 +229,57 @@ export default function ShopPhone() {
             if (ctx) { ctx.drawImage(video, 0, 0, canvas.width, canvas.height); base64Image = canvas.toDataURL("image/jpeg", 0.6).split(",")[1]; }
         }
 
-        // Try RAG-powered scan first (vision + Dutch product matching)
-        if (base64Image) {
-            try {
-                const matched = await scanAndMatch(base64Image);
-                if (matched) {
-                    setProduct({ name: matched.name, brand: matched.brand, price: matched.price, currency: "€", tts: matched.tts });
-                    setAppState("scanned");
-                    // Situation graph decides what to say
-                    const ctx = { appState: "scanned" as const, inputMode, basketTotal, basketCount, balance, productPrice: matched.price, productName: matched.name, allergens: matched.allergens, isPublicPlace: inputMode === "button" };
-                    const situation = evaluateSituation(ctx);
-                    if (situation.speak) speak(situation.speak);
-                    return;
-                }
-            } catch { /* fall through to demo */ }
+        if (!base64Image) {
+            toast.error("Failed to capture image");
+            speak("Failed to capture image. Using demo product.");
+            const scanned = randomProduct();
+            setProduct(scanned);
+            setAppState("scanned");
+            speak(scanned.tts + " Would you like to add this to your basket?");
+            return;
         }
 
-        // Fallback: demo product
-        const scanned = randomProduct();
-        setProduct(scanned);
-        setAppState("scanned");
-        speak(scanned.tts + " Wil je dit toevoegen aan je mandje?");
-        setCameraOn(true);
+        try {
+            const response = await fetch("/api/rag", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ imageBase64: base64Image })
+            });
+
+            if (!response.ok) {
+                throw new Error("RAG API Error: " + response.status);
+            }
+
+            const data = await response.json();
+
+            if (!data.success || !data.match || !data.match.product) {
+                throw new Error(data.error || "No match found from RAG pipeline");
+            }
+
+            // Convert backend product schema to the frontend schema
+            const p = data.match.product;
+            const scanned: Product = {
+                name: p.name,
+                brand: p.brand || 'Unknown',
+                price: parseFloat(p.price) || 0,
+                currency: "€",
+                tts: `I found ${p.name}. The price is ${p.price} euros. ${data.match.reasoning}`
+            };
+
+            setProduct(scanned);
+            setAppState("scanned");
+
+            // Speak the product description
+            speak(scanned.tts + " Would you like to add this to your basket?");
+        } catch (e) {
+            console.error("Scan error:", e);
+            speak("Sorry, I had trouble analyzing the image. Using demo product.");
+            const scanned = randomProduct();
+            setProduct(scanned);
+            setAppState("scanned");
+            speak(scanned.tts + " Would you like to add this to your basket?");
+        }
+        setCameraOn(true); // demo mode
     }
 
     // REMOVED PREMATURE CLOSING BRACE HERE
