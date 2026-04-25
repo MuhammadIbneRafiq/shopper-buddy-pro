@@ -1,40 +1,57 @@
-# Shopper Buddy
+# Shopper Buddy Pro
 
-A voice-first shopping assistant that helps you scan products, track your basket, and pay with bunq. Designed for accessibility and hands-free grocery shopping.
+A button-first, camera-powered shopping assistant for the visually impaired. Point your phone at a shelf, tap the button — the AI reads the product aloud. No screen-reading required.
+
+---
 
 ## Features
 
-- **Dual interaction modes**: Button mode (tap/hold gestures) and Voice mode (OpenAI Realtime API)
-- **Product scanning**: Camera-based product recognition using multimodal RAG with AWS Bedrock
-- **Basket management**: Add/remove items, track quantities, automatic totals
-- **Bunq integration**: Real-time balance checking and payment processing
-- **Balance-aware prompts**: Spoken warnings when basket exceeds available balance
-- **Triple-tap undo**: Quickly undo the last added product in button mode
-- **Natural language voice commands**: Scan, basket, checkout, remove items, cancel
-- **Liquid glass UI**: Modern bunq-inspired dark theme with glassmorphism
+- **Button-first interaction** — one large button drives the entire experience via tap and hold gestures
+- **Camera product recognition** — multimodal RAG pipeline identifies products from a live camera frame
+- **Spoken results** — product name, brand, and price read aloud instantly via AI TTS
+- **Voice mode** — hold button and speak to add items, check basket
+- **Basket management** — tap to count quantity, voice commands to add/remove, auto-totals
+- **bunq integration** — live balance check
+- **Balance-aware warnings** — spoken alert when basket exceeds available balance
+- **Multilingual** — English and Dutch voice commands supported
+
+---
 
 ## Tech Stack
 
-- **Frontend**: React 18, TypeScript, TailwindCSS, Radix UI
-- **Voice**: OpenAI Realtime WebSocket API (gpt-4o-realtime-preview), browser `speechSynthesis` fallback
-- **Speech-to-text**: OpenAI Whisper API
-- **Product recognition**: AWS Bedrock (Claude 3 Haiku, Nova Sonic, Titan Embeddings)
-- **Payments**: Bunq API (sandbox)
-- **Hosting**: Vercel (serverless functions for RAG, bunq proxy, audio embeddings)
-- **Build**: Vite with SWC
+| Layer | Technology |
+|---|---|
+| Frontend | React 18, TypeScript, Vite (SWC), TailwindCSS, Radix UI |
+| Vision / RAG | AWS Bedrock — Claude 3 Haiku (vision) + Amazon Titan Embed Text v2 |
+| Speech-to-text | OpenAI Whisper API |
+| Text-to-speech | OpenAI GPT-4o Realtime API (streaming PCM) |
+| Balance | bunq API |
+| Hosting | Vercel (serverless functions) |
+| Data | Supabase |
+
+---
 
 ## Getting Started
 
 ### Prerequisites
 
 - Node.js 18+
-- Bunq sandbox account (for balance/payments)
-- OpenAI API key (for voice/speech)
-- AWS Bedrock credentials (for product recognition)
+- AWS account with Bedrock access (Claude 3 Haiku + Titan Embeddings enabled in your region)
+- OpenAI API key
+- bunq sandbox account
+- Supabase project
 
-### Environment Variables
+### 1. Clone & Install
 
-Create a `.env` file in the root:
+```bash
+git clone https://github.com/MuhammadIbneRafiq/shopper-buddy-pro.git
+cd shopper-buddy-pro
+npm install
+```
+
+### 2. Environment Variables
+
+Create a `.env` file in the root directory:
 
 ```env
 # OpenAI
@@ -43,120 +60,190 @@ VITE_OPENAI_API_KEY=sk-...
 # AWS Bedrock
 AWS_ACCESS_KEY_ID=...
 AWS_SECRET_ACCESS_KEY=...
-AWS_SESSION_TOKEN=...  # optional
-VITE_AWS_BEARER_TOKEN_BEDROCK=...  # for embeddings
+AWS_SESSION_TOKEN=...
+AWS_DEFAULT_REGION=us-east-1
+AWS_BEARER_TOKEN_BEDROCK=...
 
-# Bunq
+# bunq
+VITE_BUNQ_API_KEY=...
 VITE_BUNQ_SESSION_TOKEN=...
 VITE_BUNQ_USER_ID=...
 VITE_BUNQ_ACCOUNT_ID=...
+
+# Supabase
+VITE_SUPABASE_URL=...
+VITE_SUPABASE_PUBLISHABLE_KEY=...
+VITE_SUPABASE_PROJECT_ID=...
 ```
 
-### Local Development
+### 3. Build the Product Catalogue
+
+The RAG pipeline requires pre-computed embeddings. Run once before starting the dev server:
 
 ```bash
-# Install dependencies
-npm install
+node scripts/embed-catalog.mjs
+```
 
-# Start dev server
+This reads the supermarket catalogue (covering the 5 largest chains in the Netherlands, data last updated March 2026), embeds each product using Amazon Titan Text Embeddings v2, and outputs:
+
+- `src/data/catalog-embeddings.bin` — Float32 binary vectors (256-dim, ~67 MB)
+- `src/data/catalog-index.json` — product metadata index (~12.5 MB)
+
+The script is resumable — if interrupted, re-running picks up from the last checkpoint.
+
+### 4. Start the Dev Server
+
+```bash
 npm run dev
-
-# Open http://localhost:8080
 ```
 
-### Deployment to Vercel
+Open [http://localhost:8080](http://localhost:8080) in a browser.
 
-```bash
-# Deploy
-vercel
+> **Note:** Camera access requires HTTPS or localhost. On mobile, use a tunnel like `ngrok` or deploy to Vercel.
 
-# Or use git push to trigger auto-deploy
-git push origin feature/elvir
-```
+---
 
 ## Usage
 
+### First Launch
+
+On first open, the app speaks a welcome prompt asking you to choose an input mode:
+- **Single tap** → Button mode
+- **Hold** → Voice mode
+
 ### Button Mode
 
-- **Tap once**: Scan a product
-- **Double-tap**: Skip product
-- **Tap repeatedly**: Count quantity (speaks "One", "Two", ...)
-- **Hold**: Confirm quantity / read basket
-- **Triple-tap after adding**: Undo last item
+| Gesture | Action |
+|---|---|
+| Single tap | Scan product |
+| Double-tap | Skip / dismiss |
+| Tap repeatedly | Count quantity (TTS announces each number) |
+| Hold | Confirm quantity / read basket |
+| Triple-tap after adding | Undo last item |
 
 ### Voice Mode
 
-- **Hold button**: Speak command, then release
-- **Commands**:
-  - "scan" or "scan this"
-  - "basket" or "what's in my cart"
-  - "checkout" or "pay"
-  - "remove [product name]"
-  - "cancel" or "skip"
+Hold the button, speak, then release.
 
-### Balance Integration
+| Command | Action |
+|---|---|
+| "scan" / "scan this" | Scan product |
+| "basket" / "mandje" | Read basket aloud |
+| "checkout" / "pay" / "betaal" | Initiate payment |
+| "remove [product]" | Remove item from basket |
+| "cancel" / "stop" | Cancel / go back |
+| Number words ("two" / "twee") | Set quantity |
 
-- **Welcome prompt**: Spreads current bunq balance on startup (after first tap/hold)
-- **Basket readout**: Includes balance and remaining funds / shortfall
-- **Automatic warning**: Alerts when basket total exceeds balance
+---
 
 ## Architecture
 
-### Product Recognition Pipeline
+### Product Recognition Pipeline (RAG)
 
-1. Capture camera frame → base64 image
-2. Agent 1: Claude 3 Haiku extracts visual attributes (name, brand, packaging, etc.)
-3. Agent 2: Titan Text Embedding + cosine search against catalog (256-dim vectors)
-4. Agent 3: Iterative refinement with Claude to verify matches
-5. Agent 4: Final selection with confidence scoring
+```
+Camera frame (base64)
+  └─► Claude 3 Haiku (vision)
+        └─► Extracts: brand, name, quantity, packaging, colour, label text
+              └─► Amazon Titan Embed Text v2 → 256-dim vector
+                    └─► Cosine similarity search against catalogue embeddings
+                          └─► Confidence scoring → spoken result or probable-match disclaimer
+```
 
-### Voice Architecture
+### Speech Pipeline
 
-- **OpenAI Realtime WebSocket**: Direct browser-to-OpenAI bidirectional streaming
-- **Fallback**: Browser `speechSynthesis` when API key missing or WebSocket fails
-- **Concurrency**: Shared voice orchestrator prevents overlapping input/output
-- **Autoplay**: Welcome speech deferred to first user gesture (browser policy)
+```
+Voice input:   hold button → MediaRecorder → WebM/Opus blob → OpenAI Whisper → transcript
+Intent:        rule-based situation graph (English + Dutch keywords) → action
+Voice output:  speak(text) → OpenAI GPT-4o Realtime API → streaming PCM → browser audio
+```
 
-### Vercel Serverless Functions
+### Serverless Functions (Vercel)
 
-- `api/rag.ts`: Product recognition with catalog data (~60s timeout)
-- `api/bunq.ts`: Bunq API proxy (CORS workaround, ~15s timeout)
-- `api/embed-audio.ts`: Audio embeddings for voice bucket matching
-- `api/bucket-embeddings.ts`: Pre-computed voice command embeddings
+| Function | Purpose | Timeout |
+|---|---|---|
+| `api/rag.ts` | Product recognition, catalogue search | 60s |
+| `api/bunq/[...path].ts` | bunq API proxy (CORS) | 15s |
+| `api/embed-audio.ts` | Audio → Bedrock embedding | 30s |
+| `api/bucket-embeddings.ts` | Pre-computed intent bucket embeddings | 60s |
+
+---
 
 ## Project Structure
 
 ```
-├── api/                    # Vercel serverless functions
-│   ├── rag.ts             # Product recognition
-│   ├── bunq.ts            # Bunq API proxy
-│   └── ...
+shopper-buddy-pro/
+├── api/                        # Vercel serverless functions
+│   ├── rag.ts                  # RAG product recognition
+│   ├── bunq/[...path].ts       # bunq API proxy
+│   ├── embed-audio.ts          # Audio embedding
+│   └── bucket-embeddings.ts    # Intent bucket embeddings
+├── scripts/
+│   ├── embed-catalog.mjs       # Build catalogue embeddings (run once)
+│   ├── setup-opensearch.mjs    # Optional: AWS OpenSearch setup
+│   └── test-rag.mjs            # Test the RAG pipeline
 ├── src/
-│   ├── components/
-│   │   ├── ui/            # Radix UI components
-│   │   └── ShopPhone.tsx  # Main app component
 │   ├── data/
-│   │   ├── catalog-index.json
-│   │   └── catalog-embeddings.bin
+│   │   ├── catalog-index.json       # Product metadata
+│   │   ├── catalog-embeddings.bin   # Pre-computed vectors
+│   │   └── supermarket-catalog.json # Source catalogue data
 │   ├── lib/
-│   │   ├── bunq.ts        # Bunq service
-│   │   ├── speech.ts      # TTS (OpenAI + fallback)
-│   │   ├── nova-voice.ts  # STT (Whisper)
-│   │   ├── situationGraph.ts  # Voice command routing
-│   │   └── voice-orchestrator.ts  # Concurrency manager
-│   └── pages/
-│       └── ShopPhone.tsx  # Main screen
-├── vite.config.ts         # Dev server + API plugins
-├── vercel.json            # Vercel function config
+│   │   ├── speech.ts           # TTS (OpenAI Realtime + browser fallback)
+│   │   ├── nova-voice.ts       # STT (Whisper)
+│   │   ├── situationGraph.ts   # Voice intent routing
+│   │   ├── bunq.ts             # bunq service
+│   │   └── voice-orchestrator.ts
+│   ├── pages/
+│   │   └── ShopPhone.tsx       # Main app screen & state machine
+│   └── components/ui/          # Radix UI / shadcn components
+├── vercel.json
+├── vite.config.ts
 └── package.json
 ```
 
+---
+
+## Scripts
+
+```bash
+npm run dev          # Start dev server (port 8080)
+npm run build        # Production build
+npm run lint         # ESLint
+npm run test         # Run tests once
+npm run test:watch   # Run tests in watch mode
+
+node scripts/embed-catalog.mjs      # Build product catalogue embeddings
+node scripts/setup-opensearch.mjs   # Set up AWS OpenSearch (optional)
+node scripts/test-rag.mjs           # Test RAG pipeline end-to-end
+```
+
+---
+
+## Deployment
+
+```bash
+# Install Vercel CLI
+npm i -g vercel
+
+# Deploy
+vercel
+
+# Or push to trigger auto-deploy
+git push origin feature/elvir
+```
+
+Add all environment variables from your `.env` file to your Vercel project settings before deploying.
+
+---
+
 ## Known Limitations
 
-- **Audio autoplay**: Welcome prompt requires first user interaction (browser policy)
-- **Bunq sandbox**: Currently uses sandbox API (not production payments)
-- **Camera**: Requires HTTPS or localhost (browser security)
-- **Voice accuracy**: Dependent on OpenAI Whisper and ambient noise
+- **Audio autoplay** — welcome prompt requires a user gesture first (browser security policy)
+- **bunq sandbox** — currently uses sandbox API, not live payments
+- **Camera** — requires HTTPS or localhost; use `ngrok` or Vercel for mobile testing
+- **Catalogue coverage** — limited to products from the 5 largest Dutch supermarket chains
+- **Voice accuracy** — dependent on OpenAI Whisper and ambient noise conditions
+
+---
 
 ## License
 
