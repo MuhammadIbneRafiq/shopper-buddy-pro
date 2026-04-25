@@ -62,7 +62,7 @@ export default function Inbox() {
               </div>
             ) : (
               <div className="space-y-2">
-                <Textarea placeholder="Type your reply…" value={responses[r.id] ?? ""}
+                <Textarea placeholder="Type your reply" value={responses[r.id] ?? ""}
                   onChange={(e) => setResponses((s) => ({ ...s, [r.id]: e.target.value }))} rows={2} />
                 <Button onClick={() => answer(r)} className="w-full h-12">Send reply</Button>
               </div>

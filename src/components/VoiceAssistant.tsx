@@ -88,7 +88,7 @@ export default function VoiceAssistant({ bunqData, basket, onClose }: VoiceAssis
       <div className="va__header">
         <div className="va__title">
           <Bot size={20} /><span>AI Assistant</span>
-          {bunqData && <span className="va__source">{bunqData.source === "live" ? "🟢 Live" : "🟡 Demo"}</span>}
+          {bunqData && <span className="va__source">{bunqData.source === "live" ? " Live" : " Demo"}</span>}
         </div>
         <button className="va__close" onClick={onClose} aria-label="Close"><X size={20} /></button>
       </div>
@@ -96,7 +96,7 @@ export default function VoiceAssistant({ bunqData, basket, onClose }: VoiceAssis
       {bunqData && (
         <div className="va__balance">
           <span>Balance</span>
-          <strong>€{parseFloat(bunqData.balance.value).toFixed(2)}</strong>
+          <strong>{parseFloat(bunqData.balance.value).toFixed(2)}</strong>
         </div>
       )}
 
@@ -111,7 +111,7 @@ export default function VoiceAssistant({ bunqData, basket, onClose }: VoiceAssis
             <li key={tx.id} className="va__tx">
               <span>{tx.description}</span>
               <span className={tx.type === "debit" ? "va__tx--debit" : "va__tx--credit"}>
-                {tx.type === "debit" ? "-" : "+"}€{Math.abs(parseFloat(tx.amount)).toFixed(2)}
+                {tx.type === "debit" ? "-" : "+"}{Math.abs(parseFloat(tx.amount)).toFixed(2)}
               </span>
             </li>
           ))}
@@ -125,10 +125,10 @@ export default function VoiceAssistant({ bunqData, basket, onClose }: VoiceAssis
         aria-label={listening ? "Listening" : "Hold to ask"}
       >
         {listening ? <Mic size={28} /> : <MicOff size={28} />}
-        <span>{listening ? "Listening…" : "Hold to ask"}</span>
+        <span>{listening ? "Listening" : "Hold to ask"}</span>
       </button>
 
-      <p className="va__hint">Try: "What's my balance?" · "What did I spend?" · "Can I afford this?"</p>
+      <p className="va__hint">Try: "What's my balance?"  "What did I spend?"  "Can I afford this?"</p>
     </div>
   );
 }

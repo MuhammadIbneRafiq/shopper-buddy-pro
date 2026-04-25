@@ -1,9 +1,9 @@
 /**
- * Situation Graph — evaluates the user's full context and decides
+ * Situation Graph  evaluates the user's full context and decides
  * what action to take and what to say, without requiring voice input.
  *
  * This replaces the dumb "if lower.includes('yes')" transcript handler
- * with a graph of situations → actions.
+ * with a graph of situations  actions.
  */
 
 export type AppState = 'setup' | 'idle' | 'scanning' | 'scanned' | 'quantity' | 'added' | 'checkout' | 'paying';
@@ -28,7 +28,7 @@ export interface SituationAction {
   urgency: 'high' | 'medium' | 'low';
 }
 
-// ── Situation nodes ────────────────────────────────────────────
+//  Situation nodes
 
 interface SituationNode {
   id: string;
@@ -141,7 +141,7 @@ const SITUATIONS: SituationNode[] = [
   },
 ];
 
-// ── Graph evaluator ────────────────────────────────────────────
+//  Graph evaluator
 
 /**
  * Evaluate the current context against all situation nodes.
@@ -156,7 +156,7 @@ export function evaluateSituation(ctx: ShopContext): SituationAction {
       return action;
     }
   }
-  console.log('[SituationGraph] NO MATCH — returning none', ctx);
+  console.log('[SituationGraph] NO MATCH  returning none', ctx);
   return { speak: null, autoAdvance: false, action: 'none', urgency: 'low' };
 }
 
@@ -169,7 +169,7 @@ export function processVoiceInput(
   ctx: ShopContext
 ): { action: string; qty?: number } {
   const t = transcript.toLowerCase().trim();
-  console.log(`[SituationGraph] processVoiceInput — transcript: "${transcript}" | state: ${ctx.appState} | mode: ${ctx.inputMode}`);
+  console.log(`[SituationGraph] processVoiceInput  transcript: "${transcript}" | state: ${ctx.appState} | mode: ${ctx.inputMode}`);
 
   if (ctx.appState === 'setup') {
     if (t.includes('stem') || t.includes('voice') || t.includes('spraak')) return { action: 'set_voice' };

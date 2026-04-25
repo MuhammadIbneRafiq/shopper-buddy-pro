@@ -14,7 +14,7 @@ export default function Index() {
 
   return (
     <div className="min-h-screen flex items-center justify-center">
-      <div className="animate-pulse text-muted-foreground text-lg">Loading Beacon…</div>
+      <div className="animate-pulse text-muted-foreground text-lg">Loading Beacon</div>
     </div>
   );
 }

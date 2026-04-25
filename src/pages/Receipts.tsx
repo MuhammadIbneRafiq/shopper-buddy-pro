@@ -80,7 +80,7 @@ export default function Receipts() {
         </label>
         <Button onClick={() => uploadReceipt()} disabled={busy} size="lg" variant="outline" className="h-16 text-lg">
           {busy ? <RefreshCw className="w-5 h-5 mr-2 animate-spin" /> : <Upload className="w-5 h-5 mr-2" />}
-          {busy ? "Parsing…" : "Demo receipt"}
+          {busy ? "Parsing" : "Demo receipt"}
         </Button>
       </div>
 
@@ -98,7 +98,7 @@ export default function Receipts() {
             <ul className="divide-y">
               {(r.line_items ?? []).map((it, i) => (
                 <li key={i} className="py-2 flex justify-between text-base">
-                  <span>{it.name}{it.qty && it.qty > 1 ? ` ×${it.qty}` : ""}</span>
+                  <span>{it.name}{it.qty && it.qty > 1 ? ` ${it.qty}` : ""}</span>
                   <span className="font-medium">{r.currency} {Number(it.price).toFixed(2)}</span>
                 </li>
               ))}

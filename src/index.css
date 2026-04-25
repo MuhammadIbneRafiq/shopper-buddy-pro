@@ -4,7 +4,7 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ═══════════════════════════════════════════════════════════════ */
+/*  */
 
 @layer base {
   :root {
@@ -115,13 +115,13 @@
 }
 
 
-/* ═══════════════════════════════════════════════════════════════
-   SHOP PHONE — Accessibility-first layout
+/*
+   SHOP PHONE  Accessibility-first layout
    Top 70%: camera + minimal info
    Bottom 30%: ONE big rectangle button (never changes position)
-   ═══════════════════════════════════════════════════════════════ */
+    */
 
-/* ── Root container ─────────────────────────────────────────── */
+/*  Root container  */
 
 .shop-phone {
   display: flex;
@@ -135,7 +135,7 @@
   position: relative;
 }
 
-/* ── Top 70%: camera area ───────────────────────────────────── */
+/*  Top 70%: camera area  */
 
 .shop-phone__top {
   position: relative;
@@ -153,7 +153,7 @@
   object-fit: cover;
 }
 
-/* ── Header strip (minimal, sits over camera) ───────────────── */
+/*  Header strip (minimal, sits over camera)  */
 
 .shop-phone__header {
   position: absolute;
@@ -216,7 +216,7 @@
   font-weight: 800;
 }
 
-/* ── Full-screen overlays ────────────────────────────────────── */
+/*  Full-screen overlays  */
 
 .shop-phone__overlay {
   position: absolute;
@@ -258,7 +258,7 @@
   filter: drop-shadow(0 0 16px hsla(174, 90%, 42%, 0.7));
 }
 
-/* ── Product info overlay (after scan) ──────────────────────── */
+/*  Product info overlay (after scan)  */
 
 .shop-phone__product-overlay {
   position: absolute;
@@ -364,7 +364,7 @@
   }
 }
 
-/* ── Scan frame corners ──────────────────────────────────────── */
+/*  Scan frame corners  */
 
 .shop-phone__scan-frame {
   position: absolute;
@@ -414,7 +414,7 @@
   border-radius: 0 0 8px 0;
 }
 
-/* ── Listening indicator (3 animated dots) ──────────────────── */
+/*  Listening indicator (3 animated dots)  */
 
 .shop-phone__listening-bar {
   position: absolute;
@@ -463,9 +463,9 @@
   }
 }
 
-/* ═══════════════════════════════════════════════════════════════
-   BOTTOM 30% — THE big action button
-   ═══════════════════════════════════════════════════════════════ */
+/*
+   BOTTOM 30%  THE big action button
+    */
 
 .shop-phone__action-bar {
   flex-shrink: 0;
@@ -484,7 +484,7 @@
   position: relative;
   overflow: hidden;
   transition: filter 0.2s ease;
-  /* No text, no icon — pure feel */
+  /* No text, no icon  pure feel */
   touch-action: none;
   user-select: none;
   -webkit-user-select: none;
@@ -505,7 +505,7 @@
   transition: opacity 0.3s ease;
 }
 
-/* ── Button states ───────────────────────────────────────────── */
+/*  Button states  */
 
 /* IDLE / setup: teal gradient */
 .shop-phone__main-btn--idle {
@@ -581,7 +581,7 @@
   }
 }
 
-/* QUANTITY COUNTING: amber — each tap causes a ripple flash */
+/* QUANTITY COUNTING: amber  each tap causes a ripple flash */
 .shop-phone__main-btn--quantity {
   background: var(--gradient-warm);
   box-shadow: 0 -8px 50px hsla(36, 100%, 58%, 0.5);
@@ -600,7 +600,7 @@
   }
 }
 
-/* ── Animations ──────────────────────────────────────────────── */
+/*  Animations  */
 
 .scan-anim {
   animation: scan-bob 1s ease-in-out infinite;
@@ -630,7 +630,7 @@
   }
 }
 
-/* ── Desktop frame ───────────────────────────────────────────── */
+/*  Desktop frame  */
 
 @media (min-width: 520px) {
   .shop-phone {
