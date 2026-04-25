@@ -59,6 +59,43 @@ export async function unlockIOSAudioFromGesture(): Promise<boolean> {
   }
 }
 
+export async function playReadyChimeFromGesture(): Promise<void> {
+  if (typeof window === 'undefined') return;
+  const AudioContextCtor = window.AudioContext || (window as any).webkitAudioContext;
+  if (!AudioContextCtor) return;
+
+  const ctx: AudioContext = new AudioContextCtor();
+  await ctx.resume();
+
+  const gain = ctx.createGain();
+  gain.gain.setValueAtTime(0.0001, ctx.currentTime);
+  gain.connect(ctx.destination);
+
+  const first = ctx.createOscillator();
+  first.type = 'sine';
+  first.frequency.setValueAtTime(880, ctx.currentTime);
+  first.connect(gain);
+
+  const second = ctx.createOscillator();
+  second.type = 'sine';
+  second.frequency.setValueAtTime(1175, ctx.currentTime + 0.12);
+  second.connect(gain);
+
+  gain.gain.exponentialRampToValueAtTime(0.12, ctx.currentTime + 0.02);
+  gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.1);
+  gain.gain.setValueAtTime(0.0001, ctx.currentTime + 0.12);
+  gain.gain.exponentialRampToValueAtTime(0.12, ctx.currentTime + 0.14);
+  gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.26);
+
+  first.start(ctx.currentTime);
+  first.stop(ctx.currentTime + 0.1);
+  second.start(ctx.currentTime + 0.12);
+  second.stop(ctx.currentTime + 0.26);
+
+  await new Promise((resolve) => setTimeout(resolve, 320));
+  await ctx.close();
+}
+
 async function speakViaOpenAIAudioSpeech(text: string, apiKey: string): Promise<void> {
   const response = await fetch('https://api.openai.com/v1/audio/speech', {
     method: 'POST',

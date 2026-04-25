@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { ShoppingCart, Package, ScanBarcode, Check } from "lucide-react";
-import { isIOSAudioUnlockNeeded, speak, stopSpeaking, unlockIOSAudioFromGesture } from "@/lib/speech";
+import { isIOSAudioUnlockNeeded, playReadyChimeFromGesture, speak, stopSpeaking, unlockIOSAudioFromGesture } from "@/lib/speech";
 import { bunq } from "@/lib/bunq";
 import { toast } from "sonner";
 import { useNovaVoice } from "@/lib/nova-voice";
@@ -133,6 +133,7 @@ export default function ShopPhone() {
             toast.error("Please tap again to enable audio on iPhone");
             return;
         }
+        void playReadyChimeFromGesture().catch(() => undefined);
         setShowIOSAudioOverlay(false);
         toast.success("Audio unlocked");
     }
@@ -766,16 +767,27 @@ export default function ShopPhone() {
                 )}
 
                 {showIOSAudioOverlay && (
-                    <div className="shop-phone__ios-audio-overlay" role="dialog" aria-modal="true" aria-label="Enable audio">
+                    <div
+                        className="shop-phone__ios-audio-overlay"
+                        role="dialog"
+                        aria-modal="true"
+                        aria-label="Enable audio"
+                        onClick={() => {
+                            void onIOSAudioOverlayTap();
+                        }}
+                    >
                         <div className="shop-phone__ios-audio-card">
-                            <p className="shop-phone__ios-audio-title">Enable iPhone audio</p>
-                            <p className="shop-phone__ios-audio-copy">Tap once here to enable voice playback, then use the main button below normally.</p>
+                            <p className="shop-phone__ios-audio-title">Tap anywhere here once.</p>
+                            <p className="shop-phone__ios-audio-copy">Then press the big button.</p>
                             <button
                                 type="button"
                                 className="shop-phone__ios-audio-btn"
-                                onClick={onIOSAudioOverlayTap}
+                                onClick={(event) => {
+                                    event.stopPropagation();
+                                    void onIOSAudioOverlayTap();
+                                }}
                             >
-                                Enable audio
+                                Tap to start
                             </button>
                         </div>
                     </div>
