@@ -117,6 +117,7 @@ export default function ShopPhone() {
     const inputModeRef = useRef(inputMode);
     const basketRef = useRef(basket);
     const productRef = useRef(product);
+    const scanPromptNonceRef = useRef(scanPromptNonce);
     const balanceRef = useRef<number | null>(balance);
     const lowBalanceWarnedRef = useRef(false);
     const pendingWelcomeRef = useRef<string | null>(null);
@@ -124,6 +125,7 @@ export default function ShopPhone() {
     useEffect(() => { inputModeRef.current = inputMode; console.log(`[State] inputMode → ${inputMode}`); }, [inputMode]);
     useEffect(() => { basketRef.current = basket; }, [basket]);
     useEffect(() => { productRef.current = product; }, [product]);
+    useEffect(() => { scanPromptNonceRef.current = scanPromptNonce; }, [scanPromptNonce]);
     useEffect(() => { balanceRef.current = balance; }, [balance]);
     useEffect(() => {
         setShowIOSAudioOverlay(isIOSAudioUnlockNeeded());
@@ -158,7 +160,7 @@ export default function ShopPhone() {
             : `${base} Press once to add. Double tap to skip.`;
     }
 
-    function speakScannedProductPrompt(scanned: Product) {
+    function speakScannedProductPrompt(scanned: Product, nonce: number) {
         const prompt = scannedProductPrompt(scanned);
         speak(prompt);
 
@@ -170,7 +172,7 @@ export default function ShopPhone() {
         scanPromptRetryTimerRef.current = setTimeout(() => {
             scanPromptRetryTimerRef.current = null;
             if (appStateRef.current !== "scanned") return;
-            if (productRef.current?.name !== scanned.name) return;
+            if (scanPromptNonceRef.current !== nonce) return;
             speak(prompt);
         }, 1400);
     }
@@ -252,7 +254,7 @@ export default function ShopPhone() {
         if (appState !== "scanned") return;
         if (!product) return;
         if (scanPromptNonce === 0) return;
-        speakScannedProductPrompt(product);
+        speakScannedProductPrompt(product, scanPromptNonce);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [appState, product, scanPromptNonce]);
 
