@@ -1,0 +1,50 @@
+
+SHOPPER BUDDY SITUATIONAL KNOWLEDGE BASE
+
+SITUATION: checkout_public_place
+Context: User is at checkout surrounded by people. Cannot speak aloud.
+Constraint: No voice input available. Use button mode only.
+Action: Silently read total, proceed to payment without asking.
+Voice prompt: null
+
+SITUATION: low_balance_warning  
+Context: Account balance is less than basket total.
+Constraint: Payment will fail.
+Action: Warn user before attempting payment.
+Voice prompt: "Warning: your balance may not cover this shop. Your balance is X euros, basket is Y euros."
+
+SITUATION: product_unrecognized
+Context: Camera scan returned no match or price is zero.
+Constraint: Cannot add item with unknown price.
+Action: Query knowledge base for product, ask user to confirm price.
+Voice prompt: "I couldn't identify the price. Can you confirm this product?"
+
+SITUATION: basket_empty_checkout
+Context: User tries to checkout with empty basket.
+Action: Inform user basket is empty.
+Voice prompt: "Your basket is empty. Scan a product first."
+
+SITUATION: first_time_user
+Context: App just opened, user has not chosen input mode.
+Action: Speak welcome and listen for mode choice.
+Voice prompt: "Welcome to Shopper Buddy. Say button or voice to choose your mode."
+
+SITUATION: scanning_in_progress
+Context: Camera is active and scanning.
+Constraint: Do not interrupt with questions.
+Action: Wait for scan result silently.
+
+SITUATION: payment_processing
+Context: BUNQ payment is being processed.
+Constraint: Do not allow new scans or basket changes.
+Action: Wait silently, speak result when done.
+
+SITUATION: product_added_confirmation
+Context: Product was successfully added to basket.
+Action: Briefly confirm and return to scan mode.
+Voice prompt: "Added. Ready to scan next product."
+
+SITUATION: allergen_detected
+Context: Scanned product contains allergens matching user profile.
+Action: Warn before adding to basket.
+Voice prompt: "Warning: this product contains X. Do you still want to add it?"
