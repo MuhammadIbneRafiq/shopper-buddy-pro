@@ -482,60 +482,34 @@ export default function ShopPhone() {
         holdFiredRef.current = false;
     }
 
-    // ─── Voice intent handler (Nova bucket IDs) ───────────────────────────────
-    // transcript is now a bucket ID like "SCAN_PRODUCT", "CANCEL_ABORT", etc.
+    // ─── Voice transcript handler ─────────────────────────────────────────────
     useEffect(() => {
         if (!transcript) return;
-        const bucketId = transcript.trim();
+        const lower = transcript.toLowerCase().trim();
         const state = appStateRef.current;
 
-        console.log(`[Nova] intent: ${bucketId} | state: ${state}`);
-
-        // ── State-specific handlers ────────────────────────────────────────
-
         if (state === "scanned") {
-            // User responded to "add to basket?"
-            if (bucketId === "SCAN_PRODUCT" || bucketId === "BASKET_REVIEW") {
-                doAccept(); // "scan" / "add" → accept product
-            } else if (bucketId === "CANCEL_ABORT") {
-                doSkip();
-            } else if (bucketId === "CHECKOUT_INITIATE") {
-                doSkip(); // skip this product and go to checkout
-                readBasket();
-            }
+            const num = parseInt(lower);
+            if (!isNaN(num) && num > 0) { doAddToBasket(num); }
+            else if (/yes|add|yeah|sure|ok|please|want|take/.test(lower)) { doAccept(); }
+            else if (/no|skip|nope|next|pass|cancel|don.t/.test(lower)) { doSkip(); }
 
         } else if (state === "quantity") {
-            if (bucketId === "SCAN_PRODUCT") {
-                // "add" / "scan" → confirm with current count (min 1)
-                doAddToBasket(Math.max(1, qtyRef.current));
-            } else if (bucketId === "CANCEL_ABORT") {
+            const num = parseInt(lower);
+            if (!isNaN(num) && num > 0) { doAddToBasket(num); }
+            else if (/done|confirm|yes|add|ok/.test(lower)) { doAddToBasket(Math.max(1, qtyRef.current)); }
+            else if (/cancel|no|skip|back|never/.test(lower)) {
                 if (qtyTimerRef.current) { clearTimeout(qtyTimerRef.current); qtyTimerRef.current = null; }
-                qtyRef.current = 0;
-                setQty(0);
-                setAppState("idle");
-                setProduct(null);
-                speak("Cancelled.");
+                qtyRef.current = 0; setQty(0); setAppState("idle"); setProduct(null); speak("Cancelled.");
             }
 
         } else if (state === "idle" || state === "added") {
-            if (bucketId === "SCAN_PRODUCT") {
-                doScan();
-            } else if (bucketId === "CHECKOUT_INITIATE" || bucketId === "BASKET_REVIEW") {
-                readBasket();
-            } else if (bucketId === "BALANCE_CHECK") {
-                const total = basketRef.current.reduce((s, i) => s + i.product.price * i.qty, 0);
-                speak(total > 0
-                    ? `Your basket total is ${total.toFixed(2)} euros.`
-                    : "Your basket is empty.");
-            }
+            if (/scan|product|item|add|price/.test(lower)) { doScan(); }
+            else if (/checkout|pay|done shopping|finish|basket|cart|total/.test(lower)) { readBasket(); }
 
         } else if (state === "checkout") {
-            if (bucketId === "CHECKOUT_INITIATE" || bucketId === "SCAN_PRODUCT") {
-                doPayment();
-            } else if (bucketId === "CANCEL_ABORT" || bucketId === "BASKET_REVIEW") {
-                setAppState("idle");
-                speak("OK, back to shopping.");
-            }
+            if (/yes|pay|confirm|proceed|sure|ok/.test(lower)) { doPayment(); }
+            else if (/no|cancel|back|wait/.test(lower)) { setAppState("idle"); speak("OK, back to shopping."); }
         }
 
         setTranscript("");
