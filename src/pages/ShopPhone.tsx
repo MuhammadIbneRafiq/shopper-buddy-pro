@@ -1,9 +1,9 @@
-﻿import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ShoppingCart, Package, ScanBarcode, Check } from "lucide-react";
 import { speak, stopSpeaking } from "@/lib/speech";
 import { bunq } from "@/lib/bunq";
-import { classifyVoiceIntent } from "@/lib/rag-buckets";
 import { toast } from "sonner";
+import { useNovaVoice } from "@/lib/nova-voice";
 
 /*
 
@@ -22,8 +22,8 @@ import { toast } from "sonner";
       Single tap = button mode
       Hold       = voice mode
 
-    "Explain only available functions"
-     TTS only announces what the button can do RIGHT NOW
+    Voice mode now uses Nova Multimodal Embeddings:
+      Hold button → record audio → release → Nova classifies intent → action
 
 */
 
@@ -69,160 +69,6 @@ function randomProduct(): Product {
     return DEMO_PRODUCTS[Math.floor(Math.random() * DEMO_PRODUCTS.length)];
 }
 
-//  SPEECH RECOGNITION HOOK
-
-interface SpeechRecognitionInstance {
-    continuous: boolean;
-    interimResults: boolean;
-    lang: string;
-    onresult: ((e: any) => void) | null;
-    onerror: ((e: any) => void) | null;
-    onend: (() => void) | null;
-    onstart: (() => void) | null;
-    onaudiostart: (() => void) | null;
-    onsoundstart: (() => void) | null;
-    onspeechstart: (() => void) | null;
-    onspeechend: (() => void) | null;
-    onaudioend: (() => void) | null;
-    start: () => void;
-    stop: () => void;
-}
-
-type SpeechRecognitionConstructor = new () => SpeechRecognitionInstance;
-type WindowWithSR = Window & {
-    SpeechRecognition?: SpeechRecognitionConstructor;
-    webkitSpeechRecognition?: SpeechRecognitionConstructor;
-};
-
-function useSpeechRecognition() {
-    const [listening, setListening] = useState(false);
-    const [transcript, setTranscript] = useState("");
-    const recRef = useRef<SpeechRecognitionInstance | null>(null);
-    const networkRetryRef = useRef(0);
-    // True when user explicitly stopped; prevents retries after button release
-    const stoppedRef = useRef(false);
-    // True from onspeechstart to onend; prevents aborting mid-upload (network error)
-    const speechStartedRef = useRef(false);
-    // Mirrors `listening` synchronously so callbacks can read it without stale closures
-    const listeningRef = useRef(false);
-
-    function setListeningSync(val: boolean) {
-        listeningRef.current = val;
-        setListening(val);
-    }
-
-    const startListening = useCallback(() => {
-        if (listeningRef.current) {
-            console.log("[SR] startListening: session already active, skipping");
-            return;
-        }
-        console.log("[SR] startListening called");
-        stoppedRef.current = false;
-        speechStartedRef.current = false;
-        networkRetryRef.current = 0;
-
-        const w = window as WindowWithSR;
-        const SR = w.SpeechRecognition || w.webkitSpeechRecognition;
-        if (!SR) {
-            console.error("[SR] ❌ SpeechRecognition API not available in this browser (try Chrome)");
-            toast.error("Speech recognition not supported — try Chrome");
-            return;
-        }
-        console.log("[SR] API available, creating instance...");
-
-        if (recRef.current) {
-            try { recRef.current.stop(); } catch (_) { /* ignore */ }
-        }
-
-        function createAndStart() {
-            if (stoppedRef.current) {
-                console.log("[SR] createAndStart skipped -- stopped");
-                return;
-            }
-            if (listeningRef.current) {
-                console.log("[SR] createAndStart skipped -- session active");
-                return;
-            }
-            const rec = new SR!();
-            rec.continuous = false;
-            rec.interimResults = false;
-            rec.lang = "en-US";
-
-            rec.onresult = (e: any) => {
-                const text = e.results[0][0].transcript;
-                const conf = e.results[0][0].confidence;
-                networkRetryRef.current = 0;
-                console.log(`[SR] ✅ onresult: "${text}" (confidence: ${conf != null ? conf.toFixed(2) : "n/a"})`);
-                setTranscript(text);
-            };
-
-            rec.onerror = (e: any) => {
-                const code: string = e?.error ?? "unknown";
-                const hints: Record<string, string> = {
-                    "not-allowed": "Microphone permission denied — allow mic in browser settings",
-                    "service-not-allowed": "Service blocked — use localhost or HTTPS",
-                    "audio-capture": "No microphone found or already in use",
-                    "no-speech": "No speech detected (silence timeout)",
-                    "network": "Network error communicating with speech service",
-                    "aborted": "Recognition aborted (normal if stopListening was called)",
-                };
-                console.warn(`[SR] ⚠️ onerror: ${code} — ${hints[code] ?? "no hint available"}`);
-
-                if (code === "network" && !stoppedRef.current) {
-                    const attempt = ++networkRetryRef.current;
-                    if (attempt <= 3) {
-                        const delay = attempt * 1500;
-                        console.log(`[SR] network error -- retry ${attempt}/3 in ${delay}ms`);
-                        setListeningSync(false);
-                        setTimeout(createAndStart, delay);
-                        return;
-                    }
-                    console.error("[SR] network error after 3 retries, giving up");
-                    toast.error("Speech service unavailable -- check internet connection");
-                    networkRetryRef.current = 0;
-                } else if (code !== "aborted" && code !== "no-speech") {
-                    toast.warning(`Mic error: ${code}`);
-                }
-                setListeningSync(false);
-            };
-
-            rec.onstart = () => console.log("[SR] onstart: recognition started, waiting for speech...");
-            rec.onaudiostart = () => console.log("[SR] onaudiostart: microphone opened");
-            rec.onsoundstart = () => console.log("[SR] onsoundstart: sound detected");
-            rec.onspeechstart = () => { speechStartedRef.current = true; console.log("[SR] onspeechstart: speech detected"); };
-            rec.onspeechend = () => console.log("[SR] onspeechend: speech stopped, processing...");
-            rec.onaudioend = () => console.log("[SR] onaudioend: microphone closed");
-            rec.onend = () => { speechStartedRef.current = false; setListeningSync(false); console.log("[SR] onend: session ended"); };
-
-            recRef.current = rec;
-            try {
-                rec.start();
-                setListeningSync(true);
-                console.log("[SR] rec.start() called");
-            } catch (err) {
-                console.error("[SR] rec.start() threw:", err);
-                setListeningSync(false);
-            }
-        }
-
-        createAndStart();
-    }, []);
-
-    const stopListening = useCallback(() => {
-        stoppedRef.current = true;
-        networkRetryRef.current = 0;
-        if (!speechStartedRef.current) {
-            console.log("[SR] stopListening: aborting (no speech in flight)");
-            try { recRef.current?.stop(); } catch (_) { /* ignore */ }
-            setListeningSync(false);
-        } else {
-            console.log("[SR] stopListening: speech in flight, letting recognition complete");
-        }
-    }, []);
-
-    return { listening, listeningRef, transcript, startListening, stopListening, setTranscript };
-}
-
 //  MAIN COMPONENT
 
 export default function ShopPhone() {
@@ -251,8 +97,9 @@ export default function ShopPhone() {
     const holdFiredRef = useRef(false);
     const HOLD_MS = 500;
 
-    const { listening, listeningRef, transcript, startListening, stopListening, setTranscript } =
-        useSpeechRecognition();
+    // Nova voice hook — replaces browser Web Speech API
+    const { listening, listeningRef, processing, transcript, startListening, stopListening, setTranscript } =
+        useNovaVoice();
 
     // Stable refs  read these inside timer callbacks to avoid stale closures
     const appStateRef = useRef(appState);
@@ -398,9 +245,6 @@ export default function ShopPhone() {
         }
     }
 
-    // REMOVED PREMATURE CLOSING BRACE HERE
-
-
     //  Read basket aloud
     function readBasket() {
         const b = basketRef.current;
@@ -466,7 +310,7 @@ export default function ShopPhone() {
         qtyRef.current = 0;
         setQty(0);
         const prompt = inputModeRef.current === "voice"
-            ? "How many? Just say the number."
+            ? "How many? Hold and say the number."
             : "How many? Tap to count, then hold to confirm.";
         speak(prompt);
     }
@@ -573,7 +417,7 @@ export default function ShopPhone() {
         if (state === "setup") {
             setInputMode("voice");
             setAppState("idle");
-            speak("Voice mode selected. Hold the button, speak your command, then release. Say things like: scan, basket, checkout, or remove last item.");
+            speak("Voice mode selected. Hold the button, speak your command, then release. Say things like: scan, basket, checkout, or cancel.");
             return;
         }
 
@@ -638,64 +482,33 @@ export default function ShopPhone() {
         holdFiredRef.current = false;
     }
 
-    //  Voice transcript processing
+    // ─── Voice intent handler (Nova bucket IDs) ───────────────────────────────
+    // transcript is now a bucket ID like "SCAN_PRODUCT", "CANCEL_ABORT", etc.
     useEffect(() => {
         if (!transcript) return;
-        const lower = transcript.toLowerCase().trim();
+        const bucketId = transcript.trim();
         const state = appStateRef.current;
-        //  Setup: voice picks mode
-        if (state === "setup") {
-            if (lower.includes("voice")) {
-                setInputMode("voice");
-                setAppState("idle");
-                speak("Voice mode selected. I'll listen after each prompt. Say scan to start.").then(() => startListening());
-            } else if (lower.includes("button")) {
-                setInputMode("button");
-                setAppState("idle");
-                speak("Button mode selected. Press the big button to scan.");
-            } else {
-                // Didn't understand  ask again
-                speak("Say button or voice.").then(() => startListening());
-            }
-            setTranscript("");
-            return;
-        }
 
-        // Basket / total questions
-        if ((lower.includes("basket") || lower.includes("cart") || lower.includes("total") ||
-            lower.includes("how much") || lower.includes("what have i") || lower.includes("what do i have")) &&
-            state !== "scanned" && state !== "quantity") {
-            readBasket();
-            return;
-        }
+        console.log(`[Nova] intent: ${bucketId} | state: ${state}`);
 
         // ── State-specific handlers ────────────────────────────────────────
 
         if (state === "scanned") {
             // User responded to "add to basket?"
-            const num = parseInt(lower);
-            if (!isNaN(num) && num > 0) {
-                // Said a specific number  accept with that quantity
-                doAddToBasket(num);
-            } else if (lower.includes("yes") || lower.includes("add") || lower.includes("yeah") ||
-                lower.includes("sure") || lower.includes("ok") || lower.includes("please") ||
-                lower.includes("want") || lower.includes("take it")) {
-                doAccept(); // affirmative without a number -> ask how many
-            } else if (lower.includes("no") || lower.includes("skip") || lower.includes("nope") ||
-                lower.includes("next") || lower.includes("pass") || lower.includes("cancel") ||
-                lower.includes("don't") || lower.includes("dont")) {
+            if (bucketId === "SCAN_PRODUCT" || bucketId === "BASKET_REVIEW") {
+                doAccept(); // "scan" / "add" → accept product
+            } else if (bucketId === "CANCEL_ABORT") {
                 doSkip();
+            } else if (bucketId === "CHECKOUT_INITIATE") {
+                doSkip(); // skip this product and go to checkout
+                readBasket();
             }
 
         } else if (state === "quantity") {
-            const num = parseInt(lower);
-            if (!isNaN(num) && num > 0) {
-                doAddToBasket(num);
-            } else if (lower.includes("done") || lower.includes("confirm") || lower.includes("yes") ||
-                lower.includes("add") || lower.includes("that") || lower.includes("ok")) {
+            if (bucketId === "SCAN_PRODUCT") {
+                // "add" / "scan" → confirm with current count (min 1)
                 doAddToBasket(Math.max(1, qtyRef.current));
-            } else if (lower.includes("cancel") || lower.includes("no") || lower.includes("skip") ||
-                lower.includes("back") || lower.includes("never mind") || lower.includes("nevermind")) {
+            } else if (bucketId === "CANCEL_ABORT") {
                 if (qtyTimerRef.current) { clearTimeout(qtyTimerRef.current); qtyTimerRef.current = null; }
                 qtyRef.current = 0;
                 setQty(0);
@@ -705,24 +518,27 @@ export default function ShopPhone() {
             }
 
         } else if (state === "idle" || state === "added") {
-            if (lower.includes("scan") || lower.includes("product") || lower.includes("item") ||
-                lower.includes("add") || lower.includes("price")) {
+            if (bucketId === "SCAN_PRODUCT") {
                 doScan();
-            } else if (lower.includes("checkout") || lower.includes("pay") ||
-                lower.includes("done shopping") || lower.includes("finish")) {
-                readBasket(); // read basket first so user hears total before confirming
+            } else if (bucketId === "CHECKOUT_INITIATE" || bucketId === "BASKET_REVIEW") {
+                readBasket();
+            } else if (bucketId === "BALANCE_CHECK") {
+                const total = basketRef.current.reduce((s, i) => s + i.product.price * i.qty, 0);
+                speak(total > 0
+                    ? `Your basket total is ${total.toFixed(2)} euros.`
+                    : "Your basket is empty.");
             }
 
         } else if (state === "checkout") {
-            if (lower.includes("yes") || lower.includes("pay") || lower.includes("confirm") ||
-                lower.includes("proceed") || lower.includes("sure") || lower.includes("ok")) {
+            if (bucketId === "CHECKOUT_INITIATE" || bucketId === "SCAN_PRODUCT") {
                 doPayment();
-            } else if (lower.includes("no") || lower.includes("cancel") || lower.includes("back") ||
-                lower.includes("wait") || lower.includes("not yet")) {
+            } else if (bucketId === "CANCEL_ABORT" || bucketId === "BASKET_REVIEW") {
                 setAppState("idle");
                 speak("OK, back to shopping.");
             }
         }
+
+        setTranscript("");
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [transcript]);
 
@@ -735,10 +551,11 @@ export default function ShopPhone() {
         "shop-phone__main-btn",
         appState === "added" ? "shop-phone__main-btn--success" :
             (isHolding || listening) ? "shop-phone__main-btn--listening" :
-                appState === "scanning" ? "shop-phone__main-btn--scanning" :
-                    appState === "quantity" ? "shop-phone__main-btn--quantity" :
-                        (appState === "checkout" || appState === "paying") ? "shop-phone__main-btn--success" :
-                            "shop-phone__main-btn--idle",
+                processing ? "shop-phone__main-btn--scanning" :
+                    appState === "scanning" ? "shop-phone__main-btn--scanning" :
+                        appState === "quantity" ? "shop-phone__main-btn--quantity" :
+                            (appState === "checkout" || appState === "paying") ? "shop-phone__main-btn--success" :
+                                "shop-phone__main-btn--idle",
     ].join(" ");
 
     //  Render
@@ -816,8 +633,8 @@ export default function ShopPhone() {
                     </div>
                 )}
 
-                {/* Listening dots */}
-                {listening && (
+                {/* Listening / processing indicator */}
+                {(listening || processing) && (
                     <div className="shop-phone__listening-bar" aria-live="polite">
                         <div className="shop-phone__listening-dot" />
                         <div className="shop-phone__listening-dot" />

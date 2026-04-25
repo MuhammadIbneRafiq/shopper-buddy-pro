@@ -3,6 +3,12 @@
     "api/rag.ts": {
       "maxDuration": 60,
       "includeFiles": "src/data/catalog-index.json|src/data/catalog-embeddings.bin"
+    },
+    "api/embed-audio.ts": {
+      "maxDuration": 30
+    },
+    "api/bucket-embeddings.ts": {
+      "maxDuration": 60
     }
   }
 }
