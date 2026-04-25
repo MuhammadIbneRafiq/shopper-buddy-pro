@@ -99,6 +99,7 @@ export default function ShopPhone() {
     const addedTapCountRef = useRef(0);
     const addedUndoActiveRef = useRef(false);
     const lastAddedRef = useRef<{ productName: string; qty: number } | null>(null);
+    const scanPromptRetryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     // Hold-press detection
     const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -148,11 +149,29 @@ export default function ShopPhone() {
         const pricePart = Number.isFinite(scanned.price) && scanned.price > 0
             ? `${scanned.price.toFixed(2)} euros`
             : "price unknown";
-        const base = `Product recognized: ${scanned.name}. Price: ${pricePart}. Would you like to add this to your basket?`;
+        const brandPart = scanned.brand ? ` Brand: ${scanned.brand}.` : "";
+        const base = `Product recognized: ${scanned.name}.${brandPart} Price: ${pricePart}. Would you like to add this to your basket?`;
 
         return inputModeRef.current === "voice"
             ? `${base} Hold the button and say yes or no.`
             : `${base} Press once to add. Double tap to skip.`;
+    }
+
+    function speakScannedProductPrompt(scanned: Product) {
+        const prompt = scannedProductPrompt(scanned);
+        speak(prompt);
+
+        if (scanPromptRetryTimerRef.current) {
+            clearTimeout(scanPromptRetryTimerRef.current);
+            scanPromptRetryTimerRef.current = null;
+        }
+
+        scanPromptRetryTimerRef.current = setTimeout(() => {
+            scanPromptRetryTimerRef.current = null;
+            if (appStateRef.current !== "scanned") return;
+            if (productRef.current?.name !== scanned.name) return;
+            speak(prompt);
+        }, 1400);
     }
 
     async function refreshBalance() {
@@ -215,6 +234,13 @@ export default function ShopPhone() {
 
     useEffect(() => () => { stopSpeaking(); stopCamera(); }, []);
 
+    useEffect(() => () => {
+        if (scanPromptRetryTimerRef.current) {
+            clearTimeout(scanPromptRetryTimerRef.current);
+            scanPromptRetryTimerRef.current = null;
+        }
+    }, []);
+
     //  Step handlers
 
     /** STEP 1: Scan product (press button once) */
@@ -247,7 +273,7 @@ export default function ShopPhone() {
             const scanned = randomProduct();
             setProduct(scanned);
             setAppState("scanned");
-            speak(scannedProductPrompt(scanned));
+            speakScannedProductPrompt(scanned);
             return;
         }
 
@@ -294,7 +320,7 @@ export default function ShopPhone() {
             setAppState("scanned");
 
             // Speak the product description
-            speak(scannedProductPrompt(scanned));
+            speakScannedProductPrompt(scanned);
         } catch (e) {
             const msg = e instanceof Error ? e.message : String(e);
             console.error("Scan error:", msg);

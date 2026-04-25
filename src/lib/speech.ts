@@ -5,11 +5,50 @@ let activeAudioCtx: AudioContext | null = null;
 let activeHtmlAudio: HTMLAudioElement | null = null;
 let activeWsAborted = false;
 let iosAudioUnlocked = false;
+let activeSpeakRequestId = 0;
+let pendingIOSSpeakText: string | null = null;
+let iosUnlockListenersAttached = false;
 
 const WS_URL = 'wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview';
+const IOS_TTS_TIMEOUT_MS = 7000;
 
-function speakFallback(text: string): Promise<void> {
+function isCurrentSpeakRequest(requestId: number): boolean {
+  return requestId === activeSpeakRequestId;
+}
+
+function detachIOSUnlockListeners(handler: EventListener) {
+  if (typeof window === 'undefined') return;
+  window.removeEventListener('pointerup', handler);
+  window.removeEventListener('touchend', handler);
+  window.removeEventListener('click', handler);
+  window.removeEventListener('keydown', handler);
+}
+
+function attachIOSUnlockOnFirstGesture() {
+  if (typeof window === 'undefined') return;
+  if (iosUnlockListenersAttached) return;
+  iosUnlockListenersAttached = true;
+
+  const handler: EventListener = () => {
+    detachIOSUnlockListeners(handler);
+    iosUnlockListenersAttached = false;
+    void unlockIOSAudioFromGesture().then((unlocked) => {
+      if (!unlocked) return;
+      const queuedText = pendingIOSSpeakText;
+      pendingIOSSpeakText = null;
+      if (queuedText) void speak(queuedText);
+    });
+  };
+
+  window.addEventListener('pointerup', handler, { passive: true, once: true });
+  window.addEventListener('touchend', handler, { passive: true, once: true });
+  window.addEventListener('click', handler, { passive: true, once: true });
+  window.addEventListener('keydown', handler, { once: true });
+}
+
+function speakFallback(text: string, requestId: number): Promise<void> {
   return new Promise<void>((resolve) => {
+    if (!isCurrentSpeakRequest(requestId)) { resolve(); return; }
     if (typeof window === 'undefined' || !window.speechSynthesis) { resolve(); return; }
     window.speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(text);
@@ -96,7 +135,9 @@ export async function playReadyChimeFromGesture(): Promise<void> {
   await ctx.close();
 }
 
-async function speakViaOpenAIAudioSpeech(text: string, apiKey: string): Promise<void> {
+async function speakViaOpenAIAudioSpeech(text: string, apiKey: string, requestId: number): Promise<void> {
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), IOS_TTS_TIMEOUT_MS);
   const response = await fetch('https://api.openai.com/v1/audio/speech', {
     method: 'POST',
     headers: {
@@ -109,7 +150,9 @@ async function speakViaOpenAIAudioSpeech(text: string, apiKey: string): Promise<
       input: text,
       response_format: 'mp3',
     }),
+    signal: controller.signal,
   });
+  window.clearTimeout(timeoutId);
 
   if (!response.ok) {
     let message = `OpenAI ${response.status}`;
@@ -121,6 +164,8 @@ async function speakViaOpenAIAudioSpeech(text: string, apiKey: string): Promise<
     }
     throw new Error(message);
   }
+
+  if (!isCurrentSpeakRequest(requestId)) return;
 
   const audioBlob = await response.blob();
   const objectUrl = URL.createObjectURL(audioBlob);
@@ -153,15 +198,25 @@ export function speak(text: string): Promise<void> {
   if (typeof window === 'undefined') return Promise.resolve();
   stopActiveListening();
   stopSpeaking();
+  const requestId = ++activeSpeakRequestId;
+
+  if (isIOSLikeBrowser() && !iosAudioUnlocked) {
+    pendingIOSSpeakText = text;
+    attachIOSUnlockOnFirstGesture();
+    return Promise.resolve();
+  }
 
   const apiKey = (import.meta as any).env?.VITE_OPENAI_API_KEY as string | undefined;
   if (!apiKey) {
     console.warn('[speak] No VITE_OPENAI_API_KEY — using browser TTS fallback');
-    return speakFallback(text);
+    return speakFallback(text, requestId);
   }
 
   if (isIOSLikeBrowser()) {
-    return speakViaOpenAIAudioSpeech(text, apiKey).catch(() => speakFallback(text));
+    return speakViaOpenAIAudioSpeech(text, apiKey, requestId).catch((error) => {
+      console.warn('[speak] iOS OpenAI TTS failed; falling back to browser speech', error);
+      return speakFallback(text, requestId);
+    });
   }
 
   const exactText = JSON.stringify(text.trim());
@@ -176,6 +231,7 @@ export function speak(text: string): Promise<void> {
     const audioChunks: Uint8Array[] = [];
 
     ws.onopen = () => {
+      if (!isCurrentSpeakRequest(requestId)) { ws.close(); done(); return; }
       ws.send(JSON.stringify({
         type: 'session.update',
         session: {
@@ -189,6 +245,7 @@ export function speak(text: string): Promise<void> {
     };
 
     ws.onmessage = (e) => {
+      if (!isCurrentSpeakRequest(requestId)) { ws.close(); done(); return; }
       const msg = JSON.parse(e.data);
       if (msg.type === 'session.updated') {
         ws.send(JSON.stringify({
@@ -221,19 +278,19 @@ export function speak(text: string): Promise<void> {
         ctx.resume().then(() => src.start()).catch(() => {
           ctx.close();
           activeAudioCtx = null;
-          speakFallback(text).then(done);
+          speakFallback(text, requestId).then(done);
         });
       } else if (msg.type === 'error') {
         console.error('[speak] OpenAI error:', msg.error);
         ws.close();
-        speakFallback(text).then(done);
+        speakFallback(text, requestId).then(done);
       }
     };
 
     ws.onerror = () => {
       if (activeWsAborted) { done(); return; }
       console.warn('[speak] WebSocket error — falling back to browser TTS');
-      speakFallback(text).then(done);
+      speakFallback(text, requestId).then(done);
     };
     ws.onclose = () => { if (activeWs === ws) activeWs = null; };
   });
@@ -243,5 +300,6 @@ export function stopSpeaking() {
   if (activeWs) { activeWsAborted = true; activeWs.close(); activeWs = null; }
   if (activeAudioCtx) { activeAudioCtx.close().catch(() => {}); activeAudioCtx = null; }
   if (activeHtmlAudio) { activeHtmlAudio.pause(); activeHtmlAudio.currentTime = 0; activeHtmlAudio = null; }
+  pendingIOSSpeakText = null;
   if (typeof window !== 'undefined') window.speechSynthesis?.cancel();
 }
