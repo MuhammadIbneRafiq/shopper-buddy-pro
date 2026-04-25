@@ -10,7 +10,7 @@
     "api/bucket-embeddings.ts": {
       "maxDuration": 60
     },
-    "api/bunq.ts": {
+    "api/bunq/[...path].ts": {
       "maxDuration": 15
     }
   }
