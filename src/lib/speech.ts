@@ -2,6 +2,7 @@ import { stopActiveListening } from '@/lib/voice-orchestrator';
 
 let activeWs: WebSocket | null = null;
 let activeAudioCtx: AudioContext | null = null;
+let activeHtmlAudio: HTMLAudioElement | null = null;
 let activeWsAborted = false;
 
 const WS_URL = 'wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview';
@@ -18,6 +19,65 @@ function speakFallback(text: string): Promise<void> {
   });
 }
 
+function isIOSLikeBrowser(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  const ua = navigator.userAgent;
+  return /iPhone|iPad|iPod/i.test(ua) || (ua.includes('Macintosh') && navigator.maxTouchPoints > 1);
+}
+
+async function speakViaOpenAIAudioSpeech(text: string, apiKey: string): Promise<void> {
+  const response = await fetch('https://api.openai.com/v1/audio/speech', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: 'gpt-4o-mini-tts',
+      voice: 'alloy',
+      input: text,
+      response_format: 'mp3',
+    }),
+  });
+
+  if (!response.ok) {
+    let message = `OpenAI ${response.status}`;
+    try {
+      const data = await response.json();
+      if (data?.error?.message) message = data.error.message;
+    } catch {
+      // ignore parse errors and keep fallback message
+    }
+    throw new Error(message);
+  }
+
+  const audioBlob = await response.blob();
+  const objectUrl = URL.createObjectURL(audioBlob);
+
+  await new Promise<void>((resolve, reject) => {
+    const audio = new Audio(objectUrl);
+    activeHtmlAudio = audio;
+    audio.preload = 'auto';
+
+    audio.onended = () => {
+      URL.revokeObjectURL(objectUrl);
+      if (activeHtmlAudio === audio) activeHtmlAudio = null;
+      resolve();
+    };
+    audio.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      if (activeHtmlAudio === audio) activeHtmlAudio = null;
+      reject(new Error('Failed to play TTS audio'));
+    };
+
+    audio.play().catch((error) => {
+      URL.revokeObjectURL(objectUrl);
+      if (activeHtmlAudio === audio) activeHtmlAudio = null;
+      reject(error);
+    });
+  });
+}
+
 export function speak(text: string): Promise<void> {
   if (typeof window === 'undefined') return Promise.resolve();
   stopActiveListening();
@@ -28,6 +88,11 @@ export function speak(text: string): Promise<void> {
     console.warn('[speak] No VITE_OPENAI_API_KEY — using browser TTS fallback');
     return speakFallback(text);
   }
+
+  if (isIOSLikeBrowser()) {
+    return speakViaOpenAIAudioSpeech(text, apiKey).catch(() => speakFallback(text));
+  }
+
   const exactText = JSON.stringify(text.trim());
 
   return new Promise<void>((resolve) => {
@@ -106,5 +171,6 @@ export function speak(text: string): Promise<void> {
 export function stopSpeaking() {
   if (activeWs) { activeWsAborted = true; activeWs.close(); activeWs = null; }
   if (activeAudioCtx) { activeAudioCtx.close().catch(() => {}); activeAudioCtx = null; }
+  if (activeHtmlAudio) { activeHtmlAudio.pause(); activeHtmlAudio.currentTime = 0; activeHtmlAudio = null; }
   if (typeof window !== 'undefined') window.speechSynthesis?.cancel();
 }
