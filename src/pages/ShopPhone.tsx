@@ -266,7 +266,9 @@ export default function ShopPhone() {
 
     // Speak welcome on first mount — mode is chosen by button gesture, not voice
     useEffect(() => {
+        let cancelled = false;
         const t = setTimeout(() => {
+            if (cancelled) return;
             console.log("[Init] speaking welcome prompt");
             speak("Welcome to Shopper Buddy. Press the button once for button mode: tap to scan and navigate. Or hold the button for voice mode: hold and speak your commands.");
         }, 700);
@@ -364,18 +366,22 @@ export default function ShopPhone() {
             }
 
             if (!data.success || !data.match || !data.match.product) {
-                throw new Error(data.error || "No match found from RAG pipeline");
+                speak("I couldn't find that product in the catalog. Please scan it again."); setAppState("idle"); return;
             }
 
             const p = data.match.product;
             const confidence = data.match.confidence ?? 0;
-            const confidenceNote = confidence < 0.5 ? " I am not very certain about this match." : "";
+            const price = parseFloat(p.price) || 0;
+            const priceStr = price > 0 ? `${price.toFixed(2)} euros` : 'price unknown';
+            const lowConf = confidence < 0.5;
             const scanned: Product = {
                 name: p.name,
                 brand: p.supermarket || 'Unknown',
-                price: parseFloat(p.price) || 0,
+                price,
                 currency: "",
-                tts: `I found ${p.name} from ${p.supermarket}. The price is ${p.price} euros.${confidenceNote} ${data.match.reasoning}`
+                tts: lowConf
+                    ? `I found something that might be ${p.name}, ${priceStr}. I'm not fully sure, so please scan again if that's wrong.`
+                    : `${p.name}, ${priceStr}.`
             };
 
             setProduct(scanned);
@@ -682,8 +688,8 @@ export default function ShopPhone() {
             }
 
         } else if (state === "quantity") {
-            const num = parseSpokenNumber(lower);
-            if (num !== null && num > 0) {
+            const num = parseInt(lower);
+            if (!isNaN(num) && num > 0) {
                 doAddToBasket(num);
             } else if (lower.includes("done") || lower.includes("confirm") || lower.includes("yes") ||
                 lower.includes("add") || lower.includes("that") || lower.includes("ok")) {
@@ -795,7 +801,7 @@ export default function ShopPhone() {
                         <div className="shop-phone__product-name">{product.name}</div>
                         <div className="shop-phone__product-brand">{product.brand}</div>
                         <div className="shop-phone__product-price">
-                            {fmtPrice(product.price)}
+                            {product.currency}{typeof product.price === 'number' ? product.price.toFixed(2) : product.price}
                         </div>
                     </div>
                 )}
