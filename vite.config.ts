@@ -5,15 +5,16 @@ import { componentTagger } from "lovable-tagger";
 
 const BEDROCK_EMBED_URL = 'https://bedrock-runtime.us-east-1.amazonaws.com/model/amazon.nova-2-multimodal-embeddings-v1:0/invoke';
 
+// Representative spoken phrase for each bucket — short, natural, what a user would say
 const BUCKETS = [
-  { id: 'CHECKOUT_INITIATE', text: "User is ready to complete their shopping and wants to pay. Examples: pay now, checkout, I'm done shopping, finish and pay, let's pay, done, ready to pay." },
-  { id: 'SCAN_PRODUCT', text: "User wants to scan a product barcode or add an item to their cart. Examples: scan this, add this product, scan the barcode, add it, what's the price, put it in my cart." },
-  { id: 'BALANCE_CHECK', text: "User wants to check their account balance or verify they have enough funds. Examples: what's my balance, how much money do I have, can I afford this, check my account." },
-  { id: 'PAYMENT_STATUS', text: "User is asking about the status of a payment being processed. Examples: is the payment done, did it go through, payment status, is it processing." },
-  { id: 'ALLERGEN_QUERY', text: "User wants to know about allergens or dietary suitability of a product. Examples: does this have nuts, is this gluten free, any dairy in this, is this vegan." },
-  { id: 'APP_ONBOARDING', text: "User needs onboarding help or wants to switch input mode. Examples: button mode, voice mode, how do I use this, help, get started, instructions." },
-  { id: 'BASKET_REVIEW', text: "User wants to review basket contents, see total, or remove an item. Examples: show my basket, what's in my cart, remove the last item, what's my total." },
-  { id: 'CANCEL_ABORT', text: "User wants to cancel the current operation or go back. Examples: cancel, stop, abort, go back, never mind, I changed my mind, quit." },
+  { id: 'CHECKOUT_INITIATE', phrase: 'checkout pay now I am done shopping' },
+  { id: 'SCAN_PRODUCT',      phrase: 'scan this add this product to my cart' },
+  { id: 'BALANCE_CHECK',     phrase: 'what is my balance how much money do I have' },
+  { id: 'PAYMENT_STATUS',    phrase: 'is the payment done did it go through' },
+  { id: 'ALLERGEN_QUERY',    phrase: 'does this have nuts is this gluten free' },
+  { id: 'APP_ONBOARDING',    phrase: 'help how do I use this voice mode button mode' },
+  { id: 'BASKET_REVIEW',     phrase: 'show my basket what is in my cart what is my total' },
+  { id: 'CANCEL_ABORT',      phrase: 'cancel stop go back never mind abort' },
 ];
 
 let bucketCache: { id: string; embedding: number[] }[] | null = null;
@@ -22,11 +23,39 @@ function readBody(req: any): Promise<string> {
   return new Promise(r => { let b = ''; req.on('data', (c: any) => b += c); req.on('end', () => r(b)); });
 }
 
-async function bedrockEmbed(payload: object, token: string): Promise<number[]> {
+// Synthesize phrase to 16kHz mono WAV using ffmpeg flite TTS
+function synthesizeWav(phrase: string): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const { spawn } = require('child_process');
+    const chunks: Buffer[] = [];
+    const ff = spawn('ffmpeg', [
+      '-f', 'lavfi',
+      '-i', `flite=text='${phrase.replace(/'/g, '')}':voice=rms`,
+      '-ar', '16000', '-ac', '1', '-f', 'wav', 'pipe:1',
+    ], { stdio: ['ignore', 'pipe', 'pipe'] });
+    ff.stdout.on('data', (c: Buffer) => chunks.push(c));
+    ff.stderr.on('data', () => {});
+    ff.on('close', (code: number) => {
+      if (code !== 0 && chunks.length === 0) return reject(new Error(`ffmpeg flite exit ${code}`));
+      resolve(Buffer.concat(chunks));
+    });
+    ff.on('error', reject);
+  });
+}
+
+async function embedAudio(wavBase64: string, token: string): Promise<number[]> {
   const res = await fetch(BEDROCK_EMBED_URL, {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', Accept: 'application/json' },
-    body: JSON.stringify(payload),
+    body: JSON.stringify({
+      schemaVersion: 'nova-multimodal-embed-v1',
+      taskType: 'SINGLE_EMBEDDING',
+      singleEmbeddingParams: {
+        embeddingPurpose: 'GENERIC_INDEX',
+        embeddingDimension: 1024,
+        audio: { format: 'wav', source: { bytes: wavBase64 } },
+      },
+    }),
   });
   if (!res.ok) throw new Error(`Bedrock ${res.status}: ${await res.text()}`);
   const d = await res.json() as any;
@@ -64,11 +93,7 @@ function ragApiPlugin() {
             const { audioBase64 } = JSON.parse(body);
             const token = process.env.VITE_AWS_BEARER_TOKEN_BEDROCK;
             if (!token) throw new Error('No token');
-            const embedding = await bedrockEmbed({
-              schemaVersion: 'nova-multimodal-embed-v1',
-              taskType: 'SINGLE_EMBEDDING',
-              singleEmbeddingParams: { embeddingPurpose: 'GENERIC_INDEX', embeddingDimension: 1024, audio: { format: 'wav', source: { bytes: audioBase64 } } },
-            }, token);
+            const embedding = await embedAudio(audioBase64, token);
             res.setHeader('Content-Type', 'application/json');
             res.end(JSON.stringify({ embedding }));
           } catch (e: any) {
@@ -83,17 +108,20 @@ function ragApiPlugin() {
         if (req.method !== 'GET') { res.statusCode = 405; res.end(); return; }
         (async () => {
           try {
-            if (bucketCache) { res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify({ buckets: bucketCache })); return; }
+            if (bucketCache) {
+              res.setHeader('Content-Type', 'application/json');
+              res.end(JSON.stringify({ buckets: bucketCache }));
+              return;
+            }
             const token = process.env.VITE_AWS_BEARER_TOKEN_BEDROCK;
             if (!token) throw new Error('No token');
-            bucketCache = await Promise.all(BUCKETS.map(async b => ({
-              id: b.id,
-              embedding: await bedrockEmbed({
-                schemaVersion: 'nova-multimodal-embed-v1',
-                taskType: 'SINGLE_EMBEDDING',
-                singleEmbeddingParams: { embeddingPurpose: 'GENERIC_INDEX', embeddingDimension: 1024, text: { text: b.text } },
-              }, token),
-            })));
+            console.log('[bucket-embeddings] synthesizing audio for', BUCKETS.length, 'buckets...');
+            bucketCache = await Promise.all(BUCKETS.map(async b => {
+              const wav = await synthesizeWav(b.phrase);
+              const embedding = await embedAudio(wav.toString('base64'), token);
+              console.log(`  ✓ ${b.id} (${embedding.length} dims)`);
+              return { id: b.id, embedding };
+            }));
             res.setHeader('Content-Type', 'application/json');
             res.end(JSON.stringify({ buckets: bucketCache }));
           } catch (e: any) {
@@ -114,8 +142,5 @@ export default defineConfig(({ mode }) => ({
     alias: { "@": path.resolve(__dirname, "./src") },
     dedupe: ["react", "react-dom", "react/jsx-runtime", "react/jsx-dev-runtime", "@tanstack/react-query", "@tanstack/query-core"],
   },
-  ssr: {
-    external: ['fs', 'path'],
-    noExternal: [],
-  },
+  ssr: { external: ['fs', 'path'], noExternal: [] },
 }));
