@@ -134,6 +134,12 @@ export default function ShopPhone() {
             return;
         }
         void playReadyChimeFromGesture().catch(() => undefined);
+        const welcome = pendingWelcomeRef.current;
+        if (welcome) {
+            pendingWelcomeRef.current = null;
+            void speak(welcome);
+            console.log("[Init] welcome text ready");
+        }
         setShowIOSAudioOverlay(false);
         toast.success("Audio unlocked");
     }
@@ -772,24 +778,15 @@ export default function ShopPhone() {
                         role="dialog"
                         aria-modal="true"
                         aria-label="Enable audio"
-                        onClick={() => {
-                            void onIOSAudioOverlayTap();
-                        }}
                     >
-                        <div className="shop-phone__ios-audio-card">
-                            <p className="shop-phone__ios-audio-title">Tap anywhere here once.</p>
-                            <p className="shop-phone__ios-audio-copy">Then press the big button.</p>
-                            <button
-                                type="button"
-                                className="shop-phone__ios-audio-btn"
-                                onClick={(event) => {
-                                    event.stopPropagation();
-                                    void onIOSAudioOverlayTap();
-                                }}
-                            >
-                                Tap to start
-                            </button>
-                        </div>
+                        <button
+                            type="button"
+                            className="shop-phone__ios-audio-hitarea"
+                            onClick={() => {
+                                void onIOSAudioOverlayTap();
+                            }}
+                            aria-label="Enable audio"
+                        />
                     </div>
                 )}
 
