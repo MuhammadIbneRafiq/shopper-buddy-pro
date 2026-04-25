@@ -8,6 +8,10 @@ let iosAudioUnlocked = false;
 let activeSpeakRequestId = 0;
 let pendingIOSSpeakText: string | null = null;
 let iosUnlockListenersAttached = false;
+let iosPrimedAudio: HTMLAudioElement | null = null;
+
+// Shortest valid silent WAV (0 PCM samples, correct RIFF header)
+const SILENT_WAV_SRC = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=';
 
 const WS_URL = 'wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview';
 const IOS_TTS_TIMEOUT_MS = 7000;
@@ -63,6 +67,23 @@ function isIOSLikeBrowser(): boolean {
   if (typeof navigator === 'undefined') return false;
   const ua = navigator.userAgent;
   return /iPhone|iPad|iPod/i.test(ua) || (ua.includes('Macintosh') && navigator.maxTouchPoints > 1);
+}
+
+export function prewarmIOSAudioElement(): void {
+  if (!isIOSLikeBrowser()) return;
+  if (typeof window === 'undefined') return;
+
+  if (!iosPrimedAudio) {
+    iosPrimedAudio = new Audio();
+    iosPrimedAudio.src = SILENT_WAV_SRC;
+    iosPrimedAudio.volume = 0;
+  } else {
+    iosPrimedAudio.load();
+  }
+
+  iosPrimedAudio.play().catch(() => {
+    // Gesture may have already ended; that's fine — element is still registered
+  });
 }
 
 export function isIOSAudioUnlockNeeded(): boolean {
@@ -171,9 +192,10 @@ async function speakViaOpenAIAudioSpeech(text: string, apiKey: string, requestId
   const objectUrl = URL.createObjectURL(audioBlob);
 
   await new Promise<void>((resolve, reject) => {
-    const audio = new Audio(objectUrl);
+    // Reuse the pre-warmed element if available (the iOS unlock trick).
+    // iOS only allows async .play() on an element that was .play()'d during a prior gesture.
+    const audio = iosPrimedAudio ?? new Audio();
     activeHtmlAudio = audio;
-    audio.preload = 'auto';
 
     audio.onended = () => {
       URL.revokeObjectURL(objectUrl);
@@ -186,6 +208,8 @@ async function speakViaOpenAIAudioSpeech(text: string, apiKey: string, requestId
       reject(new Error('Failed to play TTS audio'));
     };
 
+    audio.src = objectUrl;
+    audio.load();
     audio.play().catch((error) => {
       URL.revokeObjectURL(objectUrl);
       if (activeHtmlAudio === audio) activeHtmlAudio = null;
@@ -299,7 +323,12 @@ export function speak(text: string): Promise<void> {
 export function stopSpeaking() {
   if (activeWs) { activeWsAborted = true; activeWs.close(); activeWs = null; }
   if (activeAudioCtx) { activeAudioCtx.close().catch(() => {}); activeAudioCtx = null; }
-  if (activeHtmlAudio) { activeHtmlAudio.pause(); activeHtmlAudio.currentTime = 0; activeHtmlAudio = null; }
+  if (activeHtmlAudio) {
+    activeHtmlAudio.pause();
+    // Don't null out iosPrimedAudio — keep the unlocked element alive for next call
+    if (activeHtmlAudio !== iosPrimedAudio) activeHtmlAudio = null;
+    else activeHtmlAudio = null;
+  }
   pendingIOSSpeakText = null;
   if (typeof window !== 'undefined') window.speechSynthesis?.cancel();
 }

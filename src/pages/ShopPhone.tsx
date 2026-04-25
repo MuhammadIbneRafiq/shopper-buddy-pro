@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { ShoppingCart, Package, ScanBarcode, Check } from "lucide-react";
-import { isIOSAudioUnlockNeeded, playReadyChimeFromGesture, speak, stopSpeaking, unlockIOSAudioFromGesture } from "@/lib/speech";
+import { isIOSAudioUnlockNeeded, playReadyChimeFromGesture, prewarmIOSAudioElement, speak, stopSpeaking, unlockIOSAudioFromGesture } from "@/lib/speech";
 import { bunq } from "@/lib/bunq";
 import { toast } from "sonner";
 import { useNovaVoice } from "@/lib/nova-voice";
@@ -650,7 +650,7 @@ export default function ShopPhone() {
 
     //  Pointer events
     function onPointerDown(e: React.PointerEvent) {
-        void unlockIOSAudioFromGesture();
+        prewarmIOSAudioElement();
         (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
         holdFiredRef.current = false;
         holdTimerRef.current = setTimeout(() => {
