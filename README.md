@@ -129,7 +129,6 @@ Hold the button, speak, then release.
 |---|---|
 | "scan" / "scan this" | Scan product |
 | "basket" / "mandje" | Read basket aloud |
-| "checkout" / "pay" / "betaal" | Initiate payment |
 | "remove [product]" | Remove item from basket |
 | "cancel" / "stop" | Cancel / go back |
 | Number words ("two" / "twee") | Set quantity |
