@@ -33,5 +33,7 @@ decode-token.cjs
 test-bunq-live.cjs
 bunq-setup.cjs
 test-bedrock-now.cjs
+test-nova-sonic.mjs
+test-nova-sonic-s2s.mjs
 benchmark-results.json
 

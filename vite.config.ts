@@ -2,6 +2,9 @@ import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
 import { componentTagger } from "lovable-tagger";
+import { randomUUID } from 'node:crypto';
+import { BedrockRuntimeClient, InvokeModelWithBidirectionalStreamCommand } from '@aws-sdk/client-bedrock-runtime';
+import { NodeHttp2Handler } from '@smithy/node-http-handler';
 
 const BEDROCK_EMBED_URL = 'https://bedrock-runtime.us-east-1.amazonaws.com/model/amazon.nova-2-multimodal-embeddings-v1:0/invoke';
 
@@ -22,23 +25,69 @@ function readBody(req: any): Promise<string> {
   return new Promise(r => { let b = ''; req.on('data', (c: any) => b += c); req.on('end', () => r(b)); });
 }
 
-function spawnRunner(input: object): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const { spawn } = require('child_process');
-    const chunks: Buffer[] = [];
-    const child = spawn('node', ['scripts/nova-sonic-runner.mjs'], {
-      env: { ...process.env },
-      stdio: ['pipe', 'pipe', 'pipe'],
-    });
-    child.stdin.write(JSON.stringify(input));
-    child.stdin.end();
-    child.stdout.on('data', (c: Buffer) => chunks.push(c));
-    child.stderr.on('data', (d: Buffer) => process.stderr.write('[nova-sonic] ' + d));
-    child.on('close', (code: number) => {
-      if (code !== 0 && chunks.length === 0) return reject(new Error('nova-sonic runner failed'));
-      resolve(Buffer.concat(chunks).toString());
-    });
+async function novaSonicDirect(audioBase64: string, systemPrompt: string = 'You are a helpful shopping assistant. Keep responses short.'): Promise<{ transcript: string; audioBase64: string }> {
+  const client = new BedrockRuntimeClient({
+    region: 'us-east-1',
+    credentials: {
+      accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
+      secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
+      ...(process.env.AWS_SESSION_TOKEN ? { sessionToken: process.env.AWS_SESSION_TOKEN } : {}),
+    },
+    requestHandler: new NodeHttp2Handler({ requestTimeout: 60000, sessionTimeout: 60000 }),
   });
+
+  const promptName = randomUUID();
+  const sysId = randomUUID();
+  const audioId = randomUUID();
+
+  const events: Buffer[] = [];
+  const add = (o: object) => events.push(Buffer.from(JSON.stringify(o)));
+
+  add({ event: { sessionStart: { inferenceConfiguration: { maxTokens: 1024, topP: 0.9, temperature: 0.7 } } } });
+  add({ event: { promptStart: { promptName, textOutputConfiguration: { mediaType: 'text/plain' }, audioOutputConfiguration: { mediaType: 'audio/lpcm', sampleRateHertz: 24000, sampleSizeBits: 16, channelCount: 1, voiceId: 'matthew', encoding: 'base64', audioType: 'SPEECH' } } } });
+  add({ event: { contentStart: { promptName, contentName: sysId, type: 'TEXT', interactive: false, role: 'SYSTEM', textInputConfiguration: { mediaType: 'text/plain' } } } });
+  add({ event: { textInput: { promptName, contentName: sysId, content: systemPrompt } } });
+  add({ event: { contentEnd: { promptName, contentName: sysId } } });
+  add({ event: { contentStart: { promptName, contentName: audioId, type: 'AUDIO', interactive: true, role: 'USER', audioInputConfiguration: { mediaType: 'audio/lpcm', sampleRateHertz: 16000, sampleSizeBits: 16, channelCount: 1, audioType: 'SPEECH', encoding: 'base64' } } } });
+
+  const pcm = Buffer.from(audioBase64, 'base64');
+  for (let i = 0; i < pcm.length; i += 1024) {
+    add({ event: { audioInput: { promptName, contentName: audioId, content: pcm.slice(i, i + 1024).toString('base64') } } });
+  }
+
+  add({ event: { contentEnd: { promptName, contentName: audioId } } });
+  add({ event: { promptEnd: { promptName } } });
+  add({ event: { sessionEnd: {} } });
+
+  async function* stream() {
+    for (const payload of events) {
+      yield { chunk: { bytes: payload } };
+      await new Promise(r => setTimeout(r, 10));
+    }
+  }
+
+  const response = await client.send(
+    new InvokeModelWithBidirectionalStreamCommand({ modelId: 'amazon.nova-2-sonic-v1:0', body: stream() })
+  );
+
+  const audioChunks: Buffer[] = [];
+  let transcript = '';
+  let role = '';
+
+  if (!response.body) throw new Error('No response body from Nova Sonic');
+
+  for await (const event of response.body) {
+    if (!event.chunk?.bytes) continue;
+    let json: any;
+    try { json = JSON.parse(new TextDecoder().decode(event.chunk.bytes)); } catch { continue; }
+    const ev = json.event;
+    if (!ev) continue;
+    if (ev.contentStart) role = ev.contentStart.role;
+    else if (ev.textOutput && role === 'USER') transcript += ev.textOutput.content;
+    else if (ev.audioOutput) audioChunks.push(Buffer.from(ev.audioOutput.content, 'base64'));
+  }
+
+  return { transcript, audioBase64: Buffer.concat(audioChunks).toString('base64') };
 }
 
 function synthesizeWav(phrase: string): Promise<Buffer> {
@@ -92,9 +141,12 @@ function ragApiPlugin() {
         if (req.method !== 'POST') { res.statusCode = 405; res.end(); return; }
         readBody(req).then(async body => {
           try {
-            const result = await spawnRunner(JSON.parse(body));
+            const { audioBase64, systemPrompt } = JSON.parse(body);
+            if (!audioBase64) throw new Error('audioBase64 required');
+            if (!process.env.AWS_SECRET_ACCESS_KEY) throw new Error('AWS credentials not configured');
+            const result = await novaSonicDirect(audioBase64, systemPrompt);
             res.setHeader('Content-Type', 'application/json');
-            res.end(result);
+            res.end(JSON.stringify(result));
           } catch (e: any) {
             console.error('[nova-sonic]', e.message);
             res.statusCode = 500;
