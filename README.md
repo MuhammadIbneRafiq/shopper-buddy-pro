@@ -13,7 +13,7 @@ A button-first, camera-powered shopping assistant for the visually impaired. Poi
 - **Basket management** — tap to count quantity, voice commands to add/remove, auto-totals
 - **bunq integration** — live balance check
 - **Balance-aware warnings** — spoken alert when basket exceeds available balance
-- **Multilingual** — English and Dutch voice commands supported
+- **Multilingual** — English voice commands supported
 
 ---
 
@@ -25,6 +25,7 @@ A button-first, camera-powered shopping assistant for the visually impaired. Poi
 | Vision / RAG | AWS Bedrock — Claude 3 Haiku (vision) + Amazon Titan Embed Text v2 |
 | Speech-to-text | OpenAI Whisper API |
 | Text-to-speech | OpenAI GPT-4o Realtime API (streaming PCM) |
+| Vector database | AWS Buckets for vector db |
 | Balance | bunq API |
 | Hosting | Vercel (serverless functions) |
 
@@ -116,7 +117,7 @@ On first open, the app speaks a welcome prompt asking you to choose an input mod
 |---|---|
 | Single tap | Scan product |
 | Double-tap | Skip / dismiss |
-| Tap repeatedly | Count quantity (TTS announces each number) |
+| Tap repeatedly | Count quantity |
 | Hold | Confirm quantity / read basket |
 | Triple-tap after adding | Undo last item |
 
@@ -229,16 +230,14 @@ vercel
 git push origin feature/elvir
 ```
 
-Add all environment variables from your `.env` file to your Vercel project settings before deploying.
-
 ---
 
 ## Known Limitations
 
-- **Audio autoplay** — welcome prompt requires a user gesture first (browser security policy)
+- **Tech-stack** — Frontend framework dominated with serverless functions not scalable for large traffic
 - **bunq sandbox** — currently uses sandbox API, not live payments
 - **Camera** — requires HTTPS or localhost; use `ngrok` or Vercel for mobile testing
-- **Catalogue coverage** — limited to products from the 5 largest Dutch supermarket chains
+- **Catalogue coverage** — limited to products from the 5 largest Dutch supermarket chains via open-source database
 - **Voice accuracy** — dependent on OpenAI Whisper and ambient noise conditions
 
 ---
