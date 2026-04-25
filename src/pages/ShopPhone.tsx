@@ -83,6 +83,7 @@ export default function ShopPhone() {
     const [cameraOn, setCameraOn] = useState(false);
     const [isHolding, setIsHolding] = useState(false);
     const [showIOSAudioOverlay, setShowIOSAudioOverlay] = useState(false);
+    const [scanPromptNonce, setScanPromptNonce] = useState(0);
 
     // Quantity counter (only used in "quantity" state)
     const [qty, setQty] = useState(0);
@@ -174,6 +175,12 @@ export default function ShopPhone() {
         }, 1400);
     }
 
+    function finalizeScannedProduct(scanned: Product) {
+        setProduct(scanned);
+        setAppState("scanned");
+        setScanPromptNonce((n) => n + 1);
+    }
+
     async function refreshBalance() {
         const balanceStr = await bunq.getBalance();
         const nextBalance = parseFloat(balanceStr);
@@ -241,6 +248,14 @@ export default function ShopPhone() {
         }
     }, []);
 
+    useEffect(() => {
+        if (appState !== "scanned") return;
+        if (!product) return;
+        if (scanPromptNonce === 0) return;
+        speakScannedProductPrompt(product);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [appState, product, scanPromptNonce]);
+
     //  Step handlers
 
     /** STEP 1: Scan product (press button once) */
@@ -271,9 +286,7 @@ export default function ShopPhone() {
             toast.error("Failed to capture image");
             speak("Failed to capture image. Using demo product.");
             const scanned = randomProduct();
-            setProduct(scanned);
-            setAppState("scanned");
-            speakScannedProductPrompt(scanned);
+            finalizeScannedProduct(scanned);
             return;
         }
 
@@ -316,11 +329,7 @@ export default function ShopPhone() {
                     : `${p.name}, ${priceStr}.`
             };
 
-            setProduct(scanned);
-            setAppState("scanned");
-
-            // Speak the product description
-            speakScannedProductPrompt(scanned);
+            finalizeScannedProduct(scanned);
         } catch (e) {
             const msg = e instanceof Error ? e.message : String(e);
             console.error("Scan error:", msg);
