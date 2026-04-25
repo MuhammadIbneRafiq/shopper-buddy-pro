@@ -116,6 +116,7 @@ export default function ShopPhone() {
     const productRef = useRef(product);
     const balanceRef = useRef<number | null>(balance);
     const lowBalanceWarnedRef = useRef(false);
+    const pendingWelcomeRef = useRef<string | null>(null);
     useEffect(() => { appStateRef.current = appState; console.log(`[State] appState → ${appState}`); }, [appState]);
     useEffect(() => { inputModeRef.current = inputMode; console.log(`[State] inputMode → ${inputMode}`); }, [inputMode]);
     useEffect(() => { basketRef.current = basket; }, [basket]);
@@ -142,18 +143,16 @@ export default function ShopPhone() {
             : `Your current balance is ${currentBalance.toFixed(2)} euros.`;
     }
 
-    // Speak welcome on first mount — mode is chosen by button gesture, not voice
+    // Build welcome text on mount (no audio — browser blocks autoplay without user gesture).
+    // The text is stored in pendingWelcomeRef and spoken on the first button press.
     useEffect(() => {
         let cancelled = false;
-        const t = setTimeout(() => {
+        void refreshBalance().then((currentBalance) => {
             if (cancelled) return;
-            console.log("[Init] speaking welcome prompt");
-            void refreshBalance().then((currentBalance) => {
-                if (cancelled) return;
-                speak(`Welcome to Shopper Buddy. ${balancePromptText(currentBalance)} Press the button once for button mode: tap to scan and navigate. Or hold the button for voice mode: hold and speak your commands.`);
-            });
-        }, 700);
-        return () => { cancelled = true; clearTimeout(t); };
+            pendingWelcomeRef.current = `Welcome to Shopper Buddy. ${balancePromptText(currentBalance)} Press the button once for button mode: tap to scan and navigate. Or hold the button for voice mode: hold and speak your commands.`;
+            console.log("[Init] welcome text ready");
+        });
+        return () => { cancelled = true; };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
@@ -471,11 +470,13 @@ export default function ShopPhone() {
         const mode = inputModeRef.current;
         console.log(`[Button] shortPress | state: ${state} | mode: ${mode}`);
 
-        //  Setup: choose button mode
+        //  Setup: first tap — play welcome then confirm button mode
         if (state === "setup") {
             setInputMode("button");
             setAppState("idle");
-            speak("Button mode selected. Tap once to scan a product. Double-tap to skip. Tap to count quantity, then hold to confirm. Triple tap after adding to undo the last product. Hold anytime to hear your basket.");
+            const welcome = pendingWelcomeRef.current;
+            pendingWelcomeRef.current = null;
+            speak(welcome ?? "Button mode selected. Tap once to scan a product. Double-tap to skip. Tap to count quantity, then hold to confirm. Triple tap after adding to undo the last product. Hold anytime to hear your basket.");
             return;
         }
 
@@ -539,11 +540,13 @@ export default function ShopPhone() {
         const mode = inputModeRef.current;
         console.log(`[Button] holdFire | state: ${state} | mode: ${mode}`);
 
-        //  Setup: choose voice mode
+        //  Setup: first hold — play welcome then confirm voice mode
         if (state === "setup") {
             setInputMode("voice");
             setAppState("idle");
-            speak("Voice mode selected. Hold the button, speak your command, then release. Say things like: scan, basket, checkout, or cancel.");
+            const welcome = pendingWelcomeRef.current;
+            pendingWelcomeRef.current = null;
+            speak(welcome ?? "Voice mode selected. Hold the button, speak your command, then release. Say things like: scan, basket, checkout, or cancel.");
             return;
         }
 

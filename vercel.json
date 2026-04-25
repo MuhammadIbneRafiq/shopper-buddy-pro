@@ -9,6 +9,9 @@
     },
     "api/bucket-embeddings.ts": {
       "maxDuration": 60
+    },
+    "api/bunq.ts": {
+      "maxDuration": 15
     }
   }
 }

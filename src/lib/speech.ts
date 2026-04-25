@@ -5,16 +5,34 @@ let activeAudioCtx: AudioContext | null = null;
 
 const WS_URL = 'wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview';
 
+function speakFallback(text: string): Promise<void> {
+  return new Promise<void>((resolve) => {
+    if (typeof window === 'undefined' || !window.speechSynthesis) { resolve(); return; }
+    window.speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = 'en-US';
+    u.onend = () => resolve();
+    u.onerror = () => resolve();
+    window.speechSynthesis.speak(u);
+  });
+}
+
 export function speak(text: string): Promise<void> {
   if (typeof window === 'undefined') return Promise.resolve();
   stopActiveListening();
   stopSpeaking();
 
   const apiKey = (import.meta as any).env?.VITE_OPENAI_API_KEY as string | undefined;
-  if (!apiKey) return Promise.resolve();
+  if (!apiKey) {
+    console.warn('[speak] No VITE_OPENAI_API_KEY — using browser TTS fallback');
+    return speakFallback(text);
+  }
   const exactText = JSON.stringify(text.trim());
 
   return new Promise<void>((resolve) => {
+    let settled = false;
+    function done() { if (!settled) { settled = true; resolve(); } }
+
     const ws = new WebSocket(WS_URL, ['realtime', `openai-insecure-api-key.${apiKey}`, 'openai-beta.realtime-v1']);
     activeWs = ws;
     const audioChunks: Uint8Array[] = [];
@@ -24,9 +42,10 @@ export function speak(text: string): Promise<void> {
         type: 'session.update',
         session: {
           modalities: ['text', 'audio'],
-          instructions: `You are a text-to-speech assistant. Read this text aloud exactly as written and in English. Never translate it, never paraphrase it, never answer it, and never change the wording: ${exactText}`,
+          instructions: `You are a text-to-speech assistant. Read this text aloud verbatim in English. Do not paraphrase, translate, or respond — only speak: ${exactText}`,
           voice: 'alloy',
           output_audio_format: 'pcm16',
+          turn_detection: null,
         },
       }));
     };
@@ -36,7 +55,7 @@ export function speak(text: string): Promise<void> {
       if (msg.type === 'session.updated') {
         ws.send(JSON.stringify({
           type: 'conversation.item.create',
-          item: { type: 'message', role: 'user', content: [{ type: 'input_text', text: 'Read the prepared text now.' }] },
+          item: { type: 'message', role: 'user', content: [{ type: 'input_text', text }] },
         }));
         ws.send(JSON.stringify({ type: 'response.create' }));
       } else if (msg.type === 'response.audio.delta') {
@@ -46,7 +65,7 @@ export function speak(text: string): Promise<void> {
         audioChunks.push(bytes);
       } else if (msg.type === 'response.done') {
         ws.close();
-        if (audioChunks.length === 0) { resolve(); return; }
+        if (audioChunks.length === 0) { done(); return; }
         const total = audioChunks.reduce((s, c) => s + c.length, 0);
         const merged = new Uint8Array(total);
         let off = 0;
@@ -60,16 +79,23 @@ export function speak(text: string): Promise<void> {
         const src = ctx.createBufferSource();
         src.buffer = buf;
         src.connect(ctx.destination);
-        src.onended = () => { ctx.close(); activeAudioCtx = null; resolve(); };
-        src.start();
+        src.onended = () => { ctx.close(); activeAudioCtx = null; done(); };
+        ctx.resume().then(() => src.start()).catch(() => {
+          ctx.close();
+          activeAudioCtx = null;
+          speakFallback(text).then(done);
+        });
       } else if (msg.type === 'error') {
-        console.error('[speak]', msg.error);
+        console.error('[speak] OpenAI error:', msg.error);
         ws.close();
-        resolve();
+        speakFallback(text).then(done);
       }
     };
 
-    ws.onerror = () => { resolve(); };
+    ws.onerror = (err) => {
+      console.error('[speak] WebSocket error', err);
+      speakFallback(text).then(done);
+    };
     ws.onclose = () => { if (activeWs === ws) activeWs = null; };
   });
 }
@@ -77,4 +103,5 @@ export function speak(text: string): Promise<void> {
 export function stopSpeaking() {
   if (activeWs) { activeWs.close(); activeWs = null; }
   if (activeAudioCtx) { activeAudioCtx.close().catch(() => {}); activeAudioCtx = null; }
+  if (typeof window !== 'undefined') window.speechSynthesis?.cancel();
 }
