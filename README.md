@@ -27,7 +27,6 @@ A button-first, camera-powered shopping assistant for the visually impaired. Poi
 | Text-to-speech | OpenAI GPT-4o Realtime API (streaming PCM) |
 | Balance | bunq API |
 | Hosting | Vercel (serverless functions) |
-| Data | Supabase |
 
 ---
 
