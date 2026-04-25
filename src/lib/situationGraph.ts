@@ -160,6 +160,58 @@ export function evaluateSituation(ctx: ShopContext): SituationAction {
   return { speak: null, autoAdvance: false, action: 'none', urgency: 'low' };
 }
 
+function extractQuantity(transcript: string): number | null {
+  const digitMatch = transcript.match(/\d+/);
+  if (digitMatch) {
+    const value = parseInt(digitMatch[0], 10);
+    if (!isNaN(value) && value > 0) return value;
+  }
+
+  const wordMap: Record<string, number> = {
+    one: 1,
+    two: 2,
+    three: 3,
+    four: 4,
+    five: 5,
+    six: 6,
+    seven: 7,
+    eight: 8,
+    nine: 9,
+    ten: 10,
+    een: 1,
+    twee: 2,
+    drie: 3,
+    vier: 4,
+    vijf: 5,
+    zes: 6,
+    zeven: 7,
+    acht: 8,
+    negen: 9,
+    tien: 10,
+  };
+
+  for (const [word, value] of Object.entries(wordMap)) {
+    if (new RegExp(`\\b${word}\\b`).test(transcript)) return value;
+  }
+
+  return null;
+}
+
+function extractRemovalTarget(transcript: string): string | null {
+  const removeIntent = /(remove|delete|take off|take out|drop|discard|haal|verwijder)/.test(transcript);
+  if (!removeIntent) return null;
+
+  let cleaned = transcript
+    .replace(/^(i want to|please|can you|could you|would you|ik wil|wil je)\s+/g, '')
+    .replace(/\b(remove|delete|take off|take out|drop|discard|haal|verwijder)\b/g, '')
+    .replace(/\b(from|out of|off|my|the|uit|van|mijn|het)\b/g, ' ')
+    .replace(/\b(basket|cart|mandje)\b/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  return cleaned || null;
+}
+
 /**
  * Process a voice transcript in the context of the current situation.
  * Returns what action to take.
@@ -167,8 +219,10 @@ export function evaluateSituation(ctx: ShopContext): SituationAction {
 export function processVoiceInput(
   transcript: string,
   ctx: ShopContext
-): { action: string; qty?: number } {
+): { action: string; qty?: number; productQuery?: string } {
   const t = transcript.toLowerCase().trim();
+  const qty = extractQuantity(t);
+  const removalTarget = extractRemovalTarget(t);
   console.log(`[SituationGraph] processVoiceInput  transcript: "${transcript}" | state: ${ctx.appState} | mode: ${ctx.inputMode}`);
 
   if (ctx.appState === 'setup') {
@@ -178,27 +232,31 @@ export function processVoiceInput(
   }
 
   if (ctx.appState === 'scanned') {
-    const num = parseInt(t);
-    if (!isNaN(num) && num > 0) return { action: 'add', qty: num };
+    if (qty !== null) return { action: 'add', qty };
     if (t.includes('ja') || t.includes('yes') || t.includes('toevoegen') || t.includes('add')) return { action: 'accept' };
     if (t.includes('nee') || t.includes('no') || t.includes('skip') || t.includes('overslaan')) return { action: 'skip' };
   }
 
   if (ctx.appState === 'quantity') {
-    const num = parseInt(t);
-    if (!isNaN(num) && num > 0) return { action: 'add', qty: num };
+    if (qty !== null) return { action: 'add', qty };
     if (t.includes('klaar') || t.includes('done') || t.includes('bevestig')) return { action: 'confirm_qty' };
     if (t.includes('annuleer') || t.includes('cancel')) return { action: 'cancel' };
   }
 
   if (ctx.appState === 'idle') {
+    if (removalTarget) return { action: 'remove', productQuery: removalTarget };
     if (t.includes('scan') || t.includes('product')) return { action: 'scan' };
     if (t.includes('mandje') || t.includes('basket') || t.includes('totaal')) return { action: 'read_basket' };
     if (t.includes('betaal') || t.includes('checkout') || t.includes('afrekenen')) return { action: 'checkout' };
     if (t.includes('saldo') || t.includes('balance')) return { action: 'read_balance' };
   }
 
+  if (ctx.appState === 'added') {
+    if (removalTarget) return { action: 'remove', productQuery: removalTarget };
+  }
+
   if (ctx.appState === 'checkout') {
+    if (removalTarget) return { action: 'remove', productQuery: removalTarget };
     if (t.includes('betaal') || t.includes('ja') || t.includes('yes') || t.includes('bevestig')) return { action: 'pay' };
     if (t.includes('annuleer') || t.includes('nee') || t.includes('terug')) return { action: 'cancel' };
   }

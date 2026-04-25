@@ -1,62 +1,80 @@
-// Play raw 24kHz mono 16-bit PCM from base64
-async function playPcm(base64: string): Promise<void> {
-  const pcm = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
-  const samples = new Int16Array(pcm.buffer);
-  const ctx = new AudioContext({ sampleRate: 24000 });
-  const buf = ctx.createBuffer(1, samples.length, 24000);
-  const ch = buf.getChannelData(0);
-  for (let i = 0; i < samples.length; i++) ch[i] = samples[i] / 32768;
-  const src = ctx.createBufferSource();
-  src.buffer = buf;
-  src.connect(ctx.destination);
-  return new Promise(r => { src.onended = () => { ctx.close(); r(); }; src.start(); });
-}
+import { stopActiveListening } from '@/lib/voice-orchestrator';
 
-let currentCtx: AudioContext | null = null;
+let activeWs: WebSocket | null = null;
+let activeAudioCtx: AudioContext | null = null;
 
-export async function speak(text: string): Promise<void> {
-  if (typeof window === 'undefined') return;
+const WS_URL = 'wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview';
+
+export function speak(text: string): Promise<void> {
+  if (typeof window === 'undefined') return Promise.resolve();
+  stopActiveListening();
   stopSpeaking();
 
-  try {
-    const res = await fetch('/api/nova-sonic', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      // Send a silent 0.1s WAV + the text as system prompt so Nova speaks it
-      body: JSON.stringify({
-        audioBase64: SILENT_WAV,
-        systemPrompt: `Say exactly this and nothing else: "${text}"`,
-      }),
-    });
-    if (!res.ok) throw new Error('nova-sonic ' + res.status);
-    const { audioBase64 } = await res.json();
-    if (audioBase64) await playPcm(audioBase64);
-  } catch {
-    // Fallback to browser TTS if Nova Sonic unavailable
-    if (!('speechSynthesis' in window)) return;
-    return new Promise(resolve => {
-      const u = new SpeechSynthesisUtterance(text);
-      u.onend = () => resolve(); u.onerror = () => resolve();
-      window.speechSynthesis.speak(u);
-    });
-  }
+  const apiKey = (import.meta as any).env?.VITE_OPENAI_API_KEY as string | undefined;
+  if (!apiKey) return Promise.resolve();
+  const exactText = JSON.stringify(text.trim());
+
+  return new Promise<void>((resolve) => {
+    const ws = new WebSocket(WS_URL, ['realtime', `openai-insecure-api-key.${apiKey}`, 'openai-beta.realtime-v1']);
+    activeWs = ws;
+    const audioChunks: Uint8Array[] = [];
+
+    ws.onopen = () => {
+      ws.send(JSON.stringify({
+        type: 'session.update',
+        session: {
+          modalities: ['text', 'audio'],
+          instructions: `You are a text-to-speech assistant. Read this text aloud exactly as written and in English. Never translate it, never paraphrase it, never answer it, and never change the wording: ${exactText}`,
+          voice: 'alloy',
+          output_audio_format: 'pcm16',
+        },
+      }));
+    };
+
+    ws.onmessage = (e) => {
+      const msg = JSON.parse(e.data);
+      if (msg.type === 'session.updated') {
+        ws.send(JSON.stringify({
+          type: 'conversation.item.create',
+          item: { type: 'message', role: 'user', content: [{ type: 'input_text', text: 'Read the prepared text now.' }] },
+        }));
+        ws.send(JSON.stringify({ type: 'response.create' }));
+      } else if (msg.type === 'response.audio.delta') {
+        const raw = atob(msg.delta);
+        const bytes = new Uint8Array(raw.length);
+        for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+        audioChunks.push(bytes);
+      } else if (msg.type === 'response.done') {
+        ws.close();
+        if (audioChunks.length === 0) { resolve(); return; }
+        const total = audioChunks.reduce((s, c) => s + c.length, 0);
+        const merged = new Uint8Array(total);
+        let off = 0;
+        for (const c of audioChunks) { merged.set(c, off); off += c.length; }
+        const samples = new Int16Array(merged.buffer);
+        const ctx = new AudioContext({ sampleRate: 24000 });
+        activeAudioCtx = ctx;
+        const buf = ctx.createBuffer(1, samples.length, 24000);
+        const ch = buf.getChannelData(0);
+        for (let i = 0; i < samples.length; i++) ch[i] = samples[i] / 32768;
+        const src = ctx.createBufferSource();
+        src.buffer = buf;
+        src.connect(ctx.destination);
+        src.onended = () => { ctx.close(); activeAudioCtx = null; resolve(); };
+        src.start();
+      } else if (msg.type === 'error') {
+        console.error('[speak]', msg.error);
+        ws.close();
+        resolve();
+      }
+    };
+
+    ws.onerror = () => { resolve(); };
+    ws.onclose = () => { if (activeWs === ws) activeWs = null; };
+  });
 }
 
 export function stopSpeaking() {
-  if (typeof window !== 'undefined' && 'speechSynthesis' in window) window.speechSynthesis.cancel();
-  if (currentCtx) { currentCtx.close().catch(() => {}); currentCtx = null; }
+  if (activeWs) { activeWs.close(); activeWs = null; }
+  if (activeAudioCtx) { activeAudioCtx.close().catch(() => {}); activeAudioCtx = null; }
 }
-
-// Minimal silent 16kHz mono WAV (0.1s = 1600 samples) as base64
-// Used to trigger Nova Sonic TTS-only mode
-const SILENT_WAV = (() => {
-  const samples = 1600;
-  const buf = new ArrayBuffer(44 + samples * 2);
-  const v = new DataView(buf);
-  const w = (o: number, s: string) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
-  w(0, 'RIFF'); v.setUint32(4, 36 + samples * 2, true); w(8, 'WAVE');
-  w(12, 'fmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
-  v.setUint32(24, 16000, true); v.setUint32(28, 32000, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true);
-  w(36, 'data'); v.setUint32(40, samples * 2, true);
-  return btoa(String.fromCharCode(...new Uint8Array(buf)));
-})();

@@ -82,11 +82,13 @@ async function novaSonicDirect(audioBase64: string, systemPrompt: string = 'You 
     try { json = JSON.parse(new TextDecoder().decode(event.chunk.bytes)); } catch { continue; }
     const ev = json.event;
     if (!ev) continue;
+    console.log('[nova-sonic] event keys:', Object.keys(ev), JSON.stringify(ev).slice(0, 200));
     if (ev.contentStart) role = ev.contentStart.role;
     else if (ev.textOutput && role === 'USER') transcript += ev.textOutput.content;
     else if (ev.audioOutput) audioChunks.push(Buffer.from(ev.audioOutput.content, 'base64'));
   }
 
+  console.log('[nova-sonic] done — transcript:', JSON.stringify(transcript), '| audioChunks:', audioChunks.length, '| totalBytes:', audioChunks.reduce((s, c) => s + c.length, 0));
   return { transcript, audioBase64: Buffer.concat(audioChunks).toString('base64') };
 }
 
@@ -118,7 +120,7 @@ function ragApiPlugin() {
     name: 'rag-api',
     configureServer(server: any) {
       const env = loadEnv('development', process.cwd(), '');
-      Object.assign(process.env, env);
+      for (const [k, v] of Object.entries(env)) { if (!process.env[k]) process.env[k] = v; }
 
       server.middlewares.use('/api/rag', (req: any, res: any) => {
         if (req.method !== 'POST') return;
@@ -170,6 +172,38 @@ function ragApiPlugin() {
             res.end(JSON.stringify({ error: e.message }));
           }
         });
+      });
+
+      server.middlewares.use('/api/bunq', async (req: any, res: any) => {
+        const BUNQ_BASE = 'https://public-api.sandbox.bunq.com/v1';
+        const suffix = req.url ?? '';
+        const targetUrl = `${BUNQ_BASE}${suffix}`;
+        const token = process.env.VITE_BUNQ_SESSION_TOKEN;
+        const headersToForward: Record<string, string> = {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'none',
+          'User-Agent': 'shopper-buddy',
+          'X-Bunq-Client-Request-Id': 'r' + Date.now() + Math.random().toString(36).slice(2),
+          'X-Bunq-Language': 'en_US',
+          'X-Bunq-Region': 'nl_NL',
+          'X-Bunq-Geolocation': '0 0 0 0 000',
+        };
+        if (token) headersToForward['X-Bunq-Client-Authentication'] = token;
+        try {
+          const body = req.method !== 'GET' && req.method !== 'HEAD' ? await readBody(req) : undefined;
+          const upstream = await fetch(targetUrl, {
+            method: req.method,
+            headers: headersToForward,
+            ...(body ? { body } : {}),
+          });
+          const text = await upstream.text();
+          res.statusCode = upstream.status;
+          res.setHeader('Content-Type', 'application/json');
+          res.end(text);
+        } catch (e: any) {
+          res.statusCode = 502;
+          res.end(JSON.stringify({ error: e.message }));
+        }
       });
 
       server.middlewares.use('/api/bucket-embeddings', (req: any, res: any) => {

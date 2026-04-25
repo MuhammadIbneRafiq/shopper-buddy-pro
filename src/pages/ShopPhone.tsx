@@ -4,6 +4,7 @@ import { speak, stopSpeaking } from "@/lib/speech";
 import { bunq } from "@/lib/bunq";
 import { toast } from "sonner";
 import { useNovaVoice } from "@/lib/nova-voice";
+import { processVoiceInput } from "@/lib/situationGraph";
 
 /*
 
@@ -78,6 +79,7 @@ export default function ShopPhone() {
     const [inputMode, setInputMode] = useState<InputMode>(null);
     const [product, setProduct] = useState<Product | null>(null);
     const [basket, setBasket] = useState<BasketItem[]>([]);
+    const [balance, setBalance] = useState<number | null>(null);
     const [cameraOn, setCameraOn] = useState(false);
     const [isHolding, setIsHolding] = useState(false);
 
@@ -90,6 +92,12 @@ export default function ShopPhone() {
     // Double-tap detection (for "no/skip" in "scanned" state)
     const doubleTapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const DOUBLE_TAP_MS = 400; // window to detect double-tap
+    const ADDED_UNDO_TAP_MS = 1200;
+    const addedTapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const addedResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const addedTapCountRef = useRef(0);
+    const addedUndoActiveRef = useRef(false);
+    const lastAddedRef = useRef<{ productName: string; qty: number } | null>(null);
 
     // Hold-press detection
     const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -106,10 +114,33 @@ export default function ShopPhone() {
     const inputModeRef = useRef(inputMode);
     const basketRef = useRef(basket);
     const productRef = useRef(product);
+    const balanceRef = useRef<number | null>(balance);
+    const lowBalanceWarnedRef = useRef(false);
     useEffect(() => { appStateRef.current = appState; console.log(`[State] appState → ${appState}`); }, [appState]);
     useEffect(() => { inputModeRef.current = inputMode; console.log(`[State] inputMode → ${inputMode}`); }, [inputMode]);
     useEffect(() => { basketRef.current = basket; }, [basket]);
     useEffect(() => { productRef.current = product; }, [product]);
+    useEffect(() => { balanceRef.current = balance; }, [balance]);
+
+    function scannedProductPrompt(scanned: Product) {
+        return inputModeRef.current === "voice"
+            ? `${scanned.tts} Would you like to add this to your basket? Hold the button and say yes or no.`
+            : `${scanned.tts} Press once to add this to your basket. Double tap to skip it.`;
+    }
+
+    async function refreshBalance() {
+        const balanceStr = await bunq.getBalance();
+        const nextBalance = parseFloat(balanceStr);
+        const normalizedBalance = Number.isFinite(nextBalance) ? nextBalance : null;
+        setBalance(normalizedBalance);
+        return normalizedBalance;
+    }
+
+    function balancePromptText(currentBalance: number | null) {
+        return currentBalance === null
+            ? "I could not read your current balance right now."
+            : `Your current balance is ${currentBalance.toFixed(2)} euros.`;
+    }
 
     // Speak welcome on first mount — mode is chosen by button gesture, not voice
     useEffect(() => {
@@ -117,7 +148,10 @@ export default function ShopPhone() {
         const t = setTimeout(() => {
             if (cancelled) return;
             console.log("[Init] speaking welcome prompt");
-            speak("Welcome to Shopper Buddy. Press the button once for button mode: tap to scan and navigate. Or hold the button for voice mode: hold and speak your commands.");
+            void refreshBalance().then((currentBalance) => {
+                if (cancelled) return;
+                speak(`Welcome to Shopper Buddy. ${balancePromptText(currentBalance)} Press the button once for button mode: tap to scan and navigate. Or hold the button for voice mode: hold and speak your commands.`);
+            });
         }, 700);
         return () => { cancelled = true; clearTimeout(t); };
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -188,7 +222,7 @@ export default function ShopPhone() {
             const scanned = randomProduct();
             setProduct(scanned);
             setAppState("scanned");
-            speak(scanned.tts + " Would you like to add this to your basket?");
+            speak(scannedProductPrompt(scanned));
             return;
         }
 
@@ -235,7 +269,7 @@ export default function ShopPhone() {
             setAppState("scanned");
 
             // Speak the product description
-            speak(scanned.tts + " Would you like to add this to your basket?");
+            speak(scannedProductPrompt(scanned));
         } catch (e) {
             const msg = e instanceof Error ? e.message : String(e);
             console.error("Scan error:", msg);
@@ -248,14 +282,23 @@ export default function ShopPhone() {
     //  Read basket aloud
     function readBasket() {
         const b = basketRef.current;
+        const currentBalance = balanceRef.current;
         if (b.length === 0) {
-            speak("Your basket is empty. Scan a product to get started.");
+            const balancePart = currentBalance === null ? "" : ` ${balancePromptText(currentBalance)}`;
+            speak(`Your basket is empty. Scan a product to get started.${balancePart}`);
             return;
         }
         const total = b.reduce((s, i) => s + i.product.price * i.qty, 0);
         const itemCount = b.reduce((s, i) => s + i.qty, 0);
         const itemNames = b.map(i => `${i.qty} ${i.product.name}`).join(", ");
-        speak(`You have ${itemCount} item${itemCount !== 1 ? "s" : ""}: ${itemNames}. Total is ${total.toFixed(2)} euros. Shall I proceed to checkout?`);
+        let balancePart = "";
+        if (currentBalance !== null) {
+            const difference = Math.abs(currentBalance - total).toFixed(2);
+            balancePart = total > currentBalance
+                ? ` Your current balance is ${currentBalance.toFixed(2)} euros. Warning: you are ${difference} euros short.`
+                : ` Your current balance is ${currentBalance.toFixed(2)} euros. You would have ${difference} euros remaining after payment.`;
+        }
+        speak(`You have ${itemCount} item${itemCount !== 1 ? "s" : ""}: ${itemNames}. Total is ${total.toFixed(2)} euros.${balancePart} Shall I proceed to checkout?`);
         setAppState("checkout");
     }
 
@@ -280,6 +323,7 @@ export default function ShopPhone() {
         if (result.success) {
             speak("Payment successful. Thank you for shopping with Shopper Buddy.");
             setBasket([]);
+            void refreshBalance();
             setAppState("added");
             setTimeout(() => setAppState("idle"), 3000);
         } else {
@@ -315,6 +359,66 @@ export default function ShopPhone() {
         speak(prompt);
     }
 
+    function removeBasketQuantity(productName: string, count: number): BasketItem | null {
+        const target = basketRef.current.find(item => item.product.name === productName);
+        if (!target || count < 1) return null;
+
+        const removedQty = Math.min(count, target.qty);
+        setBasket(prev => prev
+            .map(item => item.product.name === productName ? { ...item, qty: item.qty - removedQty } : item)
+            .filter(item => item.qty > 0)
+        );
+        return { product: target.product, qty: removedQty };
+    }
+
+    function removeBasketItemByQuery(query: string): BasketItem | null {
+        const normalizedQuery = query.toLowerCase().trim();
+        if (!normalizedQuery) return null;
+
+        const target = basketRef.current.find(item => {
+            const name = item.product.name.toLowerCase();
+            return name.includes(normalizedQuery) || normalizedQuery.includes(name);
+        });
+
+        if (!target) return null;
+        setBasket(prev => prev.filter(item => item.product.name !== target.product.name));
+        return target;
+    }
+
+    function undoLastAddedProduct() {
+        const lastAdded = lastAddedRef.current;
+        if (!lastAdded) {
+            speak("There is nothing to undo.");
+            return;
+        }
+
+        const removed = removeBasketQuantity(lastAdded.productName, lastAdded.qty);
+        if (!removed) {
+            speak("There is nothing to undo.");
+            lastAddedRef.current = null;
+            return;
+        }
+
+        lastAddedRef.current = null;
+        addedUndoActiveRef.current = false;
+        if (addedResetTimerRef.current) { clearTimeout(addedResetTimerRef.current); addedResetTimerRef.current = null; }
+        setAppState("idle");
+        setProduct(null);
+        speak(`${removed.product.name} removed from your basket.`);
+    }
+
+    function scheduleAddedReset(delayMs: number = 2000) {
+        if (addedResetTimerRef.current) clearTimeout(addedResetTimerRef.current);
+        addedResetTimerRef.current = setTimeout(() => {
+            addedResetTimerRef.current = null;
+            addedUndoActiveRef.current = false;
+            setAppState("idle");
+            setProduct(null);
+            addedTapCountRef.current = 0;
+            if (addedTapTimerRef.current) { clearTimeout(addedTapTimerRef.current); addedTapTimerRef.current = null; }
+        }, delayMs);
+    }
+
     //  Commit qty items to basket
     function doAddToBasket(count: number) {
         const p = productRef.current;
@@ -332,15 +436,19 @@ export default function ShopPhone() {
             return [...prev, { product: p, qty: count }];
         });
 
+        lastAddedRef.current = { productName: p.name, qty: count };
+        if (addedTapTimerRef.current) { clearTimeout(addedTapTimerRef.current); addedTapTimerRef.current = null; }
+        addedTapCountRef.current = 0;
+        addedUndoActiveRef.current = inputModeRef.current === "button";
         qtyRef.current = 0;
         setQty(0);
         setAppState("added");
-        speak(`${count} ${p.name} added.`);
-
-        setTimeout(() => {
-            setAppState("idle");
-            setProduct(null);
-        }, 2000);
+        const addedPrompt = inputModeRef.current === "button"
+            ? `${count} ${p.name} added. Triple tap to undo.`
+            : `${count} ${p.name} added.`;
+        void speak(addedPrompt).finally(() => {
+            scheduleAddedReset(inputModeRef.current === "button" ? 4000 : 2000);
+        });
     }
 
     //  Increment tap counter (quantity state)
@@ -367,14 +475,32 @@ export default function ShopPhone() {
         if (state === "setup") {
             setInputMode("button");
             setAppState("idle");
-            speak("Button mode selected. Tap once to scan a product. Double-tap to skip. Tap to count quantity, then hold to confirm. Hold anytime to hear your basket.");
+            speak("Button mode selected. Tap once to scan a product. Double-tap to skip. Tap to count quantity, then hold to confirm. Triple tap after adding to undo the last product. Hold anytime to hear your basket.");
             return;
         }
 
-        if (state === "added" || state === "scanning") return; // busy, ignore
+        if (state === "scanning") return;
 
         if (mode === "button") {
-            if (state === "idle") {
+            if (addedUndoActiveRef.current) {
+                addedTapCountRef.current += 1;
+                if (addedTapTimerRef.current) clearTimeout(addedTapTimerRef.current);
+                if (addedResetTimerRef.current) { clearTimeout(addedResetTimerRef.current); addedResetTimerRef.current = null; }
+                if (addedTapCountRef.current >= 3) {
+                    addedTapCountRef.current = 0;
+                    addedTapTimerRef.current = null;
+                    undoLastAddedProduct();
+                    return;
+                }
+                addedTapTimerRef.current = setTimeout(() => {
+                    const taps = addedTapCountRef.current;
+                    addedTapCountRef.current = 0;
+                    addedTapTimerRef.current = null;
+                    if (taps >= 3) undoLastAddedProduct();
+                    else scheduleAddedReset(0);
+                }, ADDED_UNDO_TAP_MS);
+
+            } else if (state === "idle") {
                 doScan();
 
             } else if (state === "scanned") {
@@ -485,31 +611,62 @@ export default function ShopPhone() {
     // ─── Voice transcript handler ─────────────────────────────────────────────
     useEffect(() => {
         if (!transcript) return;
-        const lower = transcript.toLowerCase().trim();
-        const state = appStateRef.current;
+        const action = processVoiceInput(transcript, {
+            appState: appStateRef.current,
+            inputMode: inputModeRef.current,
+            basketTotal,
+            basketCount,
+            balance: balanceRef.current,
+            productPrice: productRef.current?.price ?? null,
+            productName: productRef.current?.name ?? null,
+            allergens: [],
+            isPublicPlace: inputModeRef.current === "button" && appStateRef.current === "checkout",
+        });
 
-        if (state === "scanned") {
-            const num = parseInt(lower);
-            if (!isNaN(num) && num > 0) { doAddToBasket(num); }
-            else if (/yes|add|yeah|sure|ok|please|want|take/.test(lower)) { doAccept(); }
-            else if (/no|skip|nope|next|pass|cancel|don.t/.test(lower)) { doSkip(); }
-
-        } else if (state === "quantity") {
-            const num = parseInt(lower);
-            if (!isNaN(num) && num > 0) { doAddToBasket(num); }
-            else if (/done|confirm|yes|add|ok/.test(lower)) { doAddToBasket(Math.max(1, qtyRef.current)); }
-            else if (/cancel|no|skip|back|never/.test(lower)) {
+        if (action.action === "set_voice") {
+            setInputMode("voice");
+            setAppState("idle");
+            speak("Voice mode selected. Hold the button, speak your command, then release. Say things like: scan, basket, checkout, or cancel.");
+        } else if (action.action === "set_button") {
+            setInputMode("button");
+            setAppState("idle");
+            speak("Button mode selected. Tap once to scan a product. Double-tap to skip. Tap to count quantity, then hold to confirm. Triple tap after adding to undo the last product. Hold anytime to hear your basket.");
+        } else if (action.action === "repeat_setup") {
+            speak("Say button or voice to choose how you want to use Shopper Buddy.");
+        } else if (action.action === "scan") {
+            doScan();
+        } else if (action.action === "read_basket" || action.action === "checkout") {
+            readBasket();
+        } else if (action.action === "remove" && action.productQuery) {
+            const removed = removeBasketItemByQuery(action.productQuery);
+            if (removed) speak(`${removed.product.name} removed from your basket.`);
+            else speak(`I could not find ${action.productQuery} in your basket.`);
+        } else if (action.action === "accept") {
+            doAccept();
+        } else if (action.action === "skip") {
+            doSkip();
+        } else if (action.action === "add" && action.qty) {
+            doAddToBasket(action.qty);
+        } else if (action.action === "confirm_qty") {
+            doAddToBasket(Math.max(1, qtyRef.current));
+        } else if (action.action === "pay") {
+            doPayment();
+        } else if (action.action === "cancel") {
+            if (appStateRef.current === "quantity") {
                 if (qtyTimerRef.current) { clearTimeout(qtyTimerRef.current); qtyTimerRef.current = null; }
-                qtyRef.current = 0; setQty(0); setAppState("idle"); setProduct(null); speak("Cancelled.");
+                qtyRef.current = 0;
+                setQty(0);
+                setAppState("idle");
+                setProduct(null);
+                speak("Cancelled.");
+            } else if (appStateRef.current === "checkout") {
+                setAppState("idle");
+                speak("OK, back to shopping.");
+            } else {
+                doSkip();
             }
-
-        } else if (state === "idle" || state === "added") {
-            if (/scan|product|item|add|price/.test(lower)) { doScan(); }
-            else if (/checkout|pay|done shopping|finish|basket|cart|total/.test(lower)) { readBasket(); }
-
-        } else if (state === "checkout") {
-            if (/yes|pay|confirm|proceed|sure|ok/.test(lower)) { doPayment(); }
-            else if (/no|cancel|back|wait/.test(lower)) { setAppState("idle"); speak("OK, back to shopping."); }
+        } else if (action.action === "read_balance") {
+            speak(balancePromptText(balanceRef.current));
         }
 
         setTranscript("");
@@ -519,6 +676,24 @@ export default function ShopPhone() {
     //  Derived values
     const basketTotal = basket.reduce((s, b) => s + b.product.price * b.qty, 0);
     const basketCount = basket.reduce((s, b) => s + b.qty, 0);
+
+    useEffect(() => {
+        if (balance === null || basketCount === 0) {
+            lowBalanceWarnedRef.current = false;
+            return;
+        }
+
+        if (basketTotal > balance) {
+            if (!lowBalanceWarnedRef.current) {
+                const shortBy = (basketTotal - balance).toFixed(2);
+                speak(`Warning. Your basket total of ${basketTotal.toFixed(2)} euros exceeds your current balance of ${balance.toFixed(2)} euros. You are short by ${shortBy} euros.`);
+                lowBalanceWarnedRef.current = true;
+            }
+            return;
+        }
+
+        lowBalanceWarnedRef.current = false;
+    }, [basketTotal, basketCount, balance]);
 
     // Button colour reflects current state
     const btnClass = [

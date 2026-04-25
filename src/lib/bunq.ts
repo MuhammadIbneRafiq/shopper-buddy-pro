@@ -1,4 +1,4 @@
-const BASE = "https://public-api.sandbox.bunq.com/v1";
+const BASE = "/api/bunq";
 
 function headers(token?: string): Record<string, string> {
   const h: Record<string, string> = {

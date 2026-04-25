@@ -130,9 +130,28 @@
   width: 100%;
   max-width: 480px;
   margin: 0 auto;
-  background: hsl(var(--background));
+  background:
+    radial-gradient(circle at top left, hsla(148, 80%, 54%, 0.18), transparent 34%),
+    radial-gradient(circle at top right, hsla(187, 100%, 55%, 0.14), transparent 32%),
+    linear-gradient(180deg, hsl(205 22% 11%) 0%, hsl(205 19% 9%) 48%, hsl(205 18% 8%) 100%);
   overflow: hidden;
   position: relative;
+  border: 1px solid hsla(0, 0%, 100%, 0.08);
+  box-shadow:
+    0 28px 80px rgba(0, 0, 0, 0.42),
+    inset 0 1px 0 hsla(0, 0%, 100%, 0.08);
+}
+
+.shop-phone::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 18% 12%, hsla(148, 92%, 58%, 0.16), transparent 20%),
+    radial-gradient(circle at 82% 20%, hsla(184, 100%, 61%, 0.12), transparent 20%),
+    linear-gradient(180deg, hsla(0, 0%, 100%, 0.03), transparent 28%);
+  z-index: 0;
 }
 
 /*  Top 70%: camera area  */
@@ -142,7 +161,7 @@
   flex: 1;
   min-height: 0;
   overflow: hidden;
-  background: hsl(220 18% 5%);
+  background: linear-gradient(180deg, hsl(202 20% 10%) 0%, hsl(202 18% 7%) 100%);
 }
 
 .shop-phone__video {
@@ -165,7 +184,8 @@
   align-items: center;
   justify-content: space-between;
   padding: 14px 18px;
-  background: linear-gradient(to bottom, hsla(220, 18%, 5%, 0.85) 0%, transparent 100%);
+  background: linear-gradient(to bottom, hsla(204, 22%, 10%, 0.88) 0%, hsla(204, 22%, 10%, 0.32) 72%, transparent 100%);
+  backdrop-filter: blur(20px) saturate(140%);
 }
 
 .shop-phone__logo {
@@ -178,19 +198,21 @@
   width: 34px;
   height: 34px;
   border-radius: 10px;
-  background: var(--gradient-hero);
+  background: linear-gradient(135deg, hsl(147 79% 48%), hsl(176 100% 40%));
   display: flex;
   align-items: center;
   justify-content: center;
-  color: hsl(var(--primary-foreground));
-  box-shadow: var(--shadow-glow);
+  color: white;
+  box-shadow:
+    0 10px 24px hsla(148, 88%, 46%, 0.35),
+    inset 0 1px 0 hsla(0, 0%, 100%, 0.24);
 }
 
 .shop-phone__logo-name {
   font-size: 1rem;
   font-weight: 800;
   letter-spacing: -0.02em;
-  background: var(--gradient-hero);
+  background: linear-gradient(135deg, hsl(147 88% 64%), hsl(184 100% 76%));
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -203,16 +225,17 @@
   gap: 6px;
   padding: 6px 12px;
   border-radius: 999px;
-  background: hsla(220, 16%, 12%, 0.9);
-  border: 1px solid hsl(var(--border));
-  color: hsl(var(--foreground));
+  background: linear-gradient(135deg, hsla(150, 34%, 17%, 0.7), hsla(190, 36%, 16%, 0.62));
+  border: 1px solid hsla(0, 0%, 100%, 0.12);
+  color: hsl(0 0% 100%);
   font-size: 0.95rem;
   font-weight: 700;
-  backdrop-filter: blur(8px);
+  backdrop-filter: blur(18px) saturate(150%);
+  box-shadow: inset 0 1px 0 hsla(0, 0%, 100%, 0.12);
 }
 
 .shop-phone__basket-total-pill {
-  color: hsl(var(--primary));
+  color: hsl(149 90% 63%);
   font-weight: 800;
 }
 
@@ -226,15 +249,15 @@
   align-items: center;
   justify-content: center;
   gap: 20px;
-  background: hsla(220, 18%, 5%, 0.75);
-  backdrop-filter: blur(6px);
+  background: linear-gradient(180deg, hsla(203, 21%, 9%, 0.72), hsla(203, 21%, 9%, 0.82));
+  backdrop-filter: blur(18px) saturate(140%);
   z-index: 5;
 }
 
 .shop-phone__setup-icon {
-  color: hsl(var(--primary));
+  color: hsl(149 85% 60%);
   animation: setup-glow 2s ease-in-out infinite alternate;
-  filter: drop-shadow(0 0 20px hsla(174, 90%, 42%, 0.6));
+  filter: drop-shadow(0 0 24px hsla(149, 88%, 50%, 0.42));
 }
 
 @keyframes setup-glow {
@@ -250,12 +273,12 @@
 }
 
 .shop-phone__overlay--scanning {
-  background: hsla(220, 18%, 5%, 0.6);
+  background: linear-gradient(180deg, hsla(189, 54%, 14%, 0.58), hsla(203, 21%, 9%, 0.76));
 }
 
 .shop-phone__overlay--scanning svg {
-  color: hsl(var(--primary));
-  filter: drop-shadow(0 0 16px hsla(174, 90%, 42%, 0.7));
+  color: hsl(171 100% 65%);
+  filter: drop-shadow(0 0 16px hsla(171, 100%, 58%, 0.5));
 }
 
 /*  Product info overlay (after scan)  */
@@ -271,25 +294,28 @@
   align-items: center;
   justify-content: flex-end;
   padding: 28px 24px 24px;
-  background: linear-gradient(to top, hsla(220, 18%, 5%, 0.95) 60%, transparent 100%);
+  background: linear-gradient(to top, hsla(202, 18%, 10%, 0.82) 0%, hsla(202, 16%, 11%, 0.58) 62%, transparent 100%);
+  backdrop-filter: blur(22px) saturate(140%);
+  border-top: 1px solid hsla(0, 0%, 100%, 0.12);
+  box-shadow: inset 0 1px 0 hsla(0, 0%, 100%, 0.08);
   gap: 6px;
   animation: slide-up 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 .shop-phone__product-overlay--added {
-  background: linear-gradient(to top, hsla(152, 72%, 12%, 0.95) 60%, transparent 100%);
+  background: linear-gradient(to top, hsla(149, 43%, 14%, 0.9) 0%, hsla(166, 54%, 16%, 0.62) 62%, transparent 100%);
 }
 
 .shop-phone__check-circle {
   width: 64px;
   height: 64px;
   border-radius: 50%;
-  background: var(--gradient-success);
+  background: linear-gradient(135deg, hsl(148 75% 52%), hsl(171 100% 41%));
   display: flex;
   align-items: center;
   justify-content: center;
   color: white;
-  box-shadow: 0 0 30px hsla(152, 72%, 42%, 0.5);
+  box-shadow: 0 0 36px hsla(148, 84%, 48%, 0.34);
   animation: check-pop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
   margin-bottom: 8px;
 }
@@ -309,7 +335,7 @@
 .shop-phone__product-name {
   font-size: 1.4rem;
   font-weight: 800;
-  color: hsl(var(--foreground));
+  color: hsl(0 0% 98%);
   text-align: center;
   line-height: 1.2;
   letter-spacing: -0.02em;
@@ -317,37 +343,37 @@
 
 .shop-phone__product-brand {
   font-size: 0.9rem;
-  color: hsl(var(--muted-foreground));
+  color: hsla(0, 0%, 100%, 0.68);
   font-weight: 500;
 }
 
 .shop-phone__product-price {
   font-size: 2.2rem;
   font-weight: 900;
-  color: hsl(var(--primary));
+  color: hsl(149 92% 63%);
   letter-spacing: -0.03em;
-  text-shadow: 0 0 24px hsla(174, 90%, 42%, 0.4);
+  text-shadow: 0 0 24px hsla(149, 89%, 54%, 0.28);
   margin-top: 4px;
 }
 
 /* Amber tint when in quantity mode */
 .shop-phone__product-overlay--quantity {
-  background: linear-gradient(to top, hsla(36, 100%, 10%, 0.95) 60%, transparent 100%);
+  background: linear-gradient(to top, hsla(186, 54%, 13%, 0.9) 0%, hsla(201, 30%, 12%, 0.62) 62%, transparent 100%);
 }
 
 .shop-phone__product-overlay--quantity .shop-phone__product-price {
-  color: hsl(var(--secondary));
-  text-shadow: 0 0 24px hsla(36, 100%, 58%, 0.5);
+  color: hsl(185 100% 68%);
+  text-shadow: 0 0 24px hsla(185, 100%, 62%, 0.34);
 }
 
 /* Big tap counter shown during quantity state */
 .shop-phone__qty-counter {
   font-size: 5rem;
   font-weight: 900;
-  color: hsl(var(--secondary));
+  color: hsl(185 100% 70%);
   letter-spacing: -0.05em;
   line-height: 1;
-  text-shadow: 0 0 40px hsla(36, 100%, 58%, 0.6);
+  text-shadow: 0 0 40px hsla(185, 100%, 60%, 0.34);
   animation: qty-pop 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
   margin-bottom: 4px;
 }
@@ -377,9 +403,10 @@
   position: absolute;
   width: 36px;
   height: 36px;
-  border-color: hsl(var(--primary));
+  border-color: hsla(149, 92%, 62%, 0.92);
   border-style: solid;
   border-width: 0;
+  filter: drop-shadow(0 0 12px hsla(149, 90%, 54%, 0.42));
 }
 
 .corner.tl {
@@ -425,19 +452,21 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  background: hsla(0, 80%, 20%, 0.85);
+  background: linear-gradient(135deg, hsla(151, 28%, 17%, 0.76), hsla(188, 32%, 17%, 0.72));
   border-radius: 999px;
   padding: 14px 28px;
-  border: 1px solid hsla(0, 80%, 55%, 0.4);
-  backdrop-filter: blur(8px);
+  border: 1px solid hsla(0, 0%, 100%, 0.14);
+  backdrop-filter: blur(18px) saturate(150%);
+  box-shadow: inset 0 1px 0 hsla(0, 0%, 100%, 0.1);
 }
 
 .shop-phone__listening-dot {
   width: 12px;
   height: 12px;
   border-radius: 50%;
-  background: hsl(var(--destructive));
+  background: linear-gradient(135deg, hsl(149 92% 62%), hsl(184 100% 63%));
   animation: dot-bounce 1s ease-in-out infinite;
+  box-shadow: 0 0 14px hsla(149, 91%, 58%, 0.44);
 }
 
 .shop-phone__listening-dot:nth-child(2) {
@@ -473,6 +502,9 @@
   min-height: 160px;
   padding: 0;
   position: relative;
+  background:
+    linear-gradient(180deg, hsla(205, 16%, 10%, 0.64) 0%, hsla(205, 16%, 10%, 0.92) 100%),
+    linear-gradient(135deg, hsla(149, 58%, 19%, 0.34), hsla(188, 60%, 18%, 0.26));
 }
 
 .shop-phone__main-btn {
@@ -488,6 +520,8 @@
   touch-action: none;
   user-select: none;
   -webkit-user-select: none;
+  border-top: 1px solid hsla(0, 0%, 100%, 0.14);
+  box-shadow: inset 0 1px 0 hsla(0, 0%, 100%, 0.08);
 }
 
 .shop-phone__main-btn:active {
@@ -499,7 +533,7 @@
   position: absolute;
   inset: 0;
   background: radial-gradient(ellipse at 50% 20%,
-      hsla(0, 0%, 100%, 0.18) 0%,
+      hsla(0, 0%, 100%, 0.22) 0%,
       transparent 70%);
   pointer-events: none;
   transition: opacity 0.3s ease;
@@ -509,8 +543,8 @@
 
 /* IDLE / setup: teal gradient */
 .shop-phone__main-btn--idle {
-  background: var(--gradient-hero);
-  box-shadow: 0 -8px 40px hsla(174, 90%, 42%, 0.35);
+  background: linear-gradient(135deg, hsl(148 78% 46%) 0%, hsl(172 100% 38%) 55%, hsl(186 100% 42%) 100%);
+  box-shadow: 0 -8px 44px hsla(149, 88%, 46%, 0.28);
   animation: idle-breathe 3s ease-in-out infinite;
 }
 
@@ -518,18 +552,18 @@
 
   0%,
   100% {
-    box-shadow: 0 -8px 40px hsla(174, 90%, 42%, 0.3);
+    box-shadow: 0 -8px 40px hsla(149, 88%, 46%, 0.3);
   }
 
   50% {
-    box-shadow: 0 -8px 60px hsla(174, 90%, 42%, 0.55);
+    box-shadow: 0 -8px 60px hsla(149, 88%, 46%, 0.55);
   }
 }
 
 /* SCANNING: pulsing teal */
 .shop-phone__main-btn--scanning {
-  background: linear-gradient(135deg, hsl(174 60% 30%), hsl(174 70% 36%));
-  box-shadow: 0 -8px 40px hsla(174, 90%, 42%, 0.25);
+  background: linear-gradient(135deg, hsl(169 74% 34%), hsl(186 84% 42%));
+  box-shadow: 0 -8px 40px hsla(185, 100%, 55%, 0.22);
   animation: scanning-pulse 0.9s ease-in-out infinite;
 }
 
@@ -547,8 +581,8 @@
 
 /* LISTENING / HOLDING: red */
 .shop-phone__main-btn--listening {
-  background: var(--gradient-danger);
-  box-shadow: 0 -8px 60px hsla(0, 80%, 55%, 0.5);
+  background: linear-gradient(135deg, hsl(145 72% 34%), hsl(166 100% 34%), hsl(188 100% 40%));
+  box-shadow: 0 -8px 60px hsla(166, 100%, 44%, 0.34);
   animation: listening-breathe 1s ease-in-out infinite;
 }
 
@@ -556,18 +590,18 @@
 
   0%,
   100% {
-    box-shadow: 0 -8px 40px hsla(0, 80%, 55%, 0.4);
+    box-shadow: 0 -8px 40px hsla(166, 100%, 44%, 0.4);
   }
 
   50% {
-    box-shadow: 0 -8px 80px hsla(0, 80%, 55%, 0.7);
+    box-shadow: 0 -8px 80px hsla(166, 100%, 44%, 0.7);
   }
 }
 
 /* SUCCESS: green */
 .shop-phone__main-btn--success {
-  background: var(--gradient-success);
-  box-shadow: 0 -8px 60px hsla(152, 72%, 42%, 0.55);
+  background: linear-gradient(135deg, hsl(147 78% 48%), hsl(170 100% 40%));
+  box-shadow: 0 -8px 60px hsla(148, 84%, 46%, 0.36);
   animation: success-flash 0.4s ease-out;
 }
 
@@ -583,8 +617,8 @@
 
 /* QUANTITY COUNTING: amber  each tap causes a ripple flash */
 .shop-phone__main-btn--quantity {
-  background: var(--gradient-warm);
-  box-shadow: 0 -8px 50px hsla(36, 100%, 58%, 0.5);
+  background: linear-gradient(135deg, hsl(170 66% 34%), hsl(186 94% 42%), hsl(196 100% 48%));
+  box-shadow: 0 -8px 50px hsla(186, 100%, 54%, 0.3);
   animation: qty-glow 1.8s ease-in-out infinite;
 }
 
@@ -592,41 +626,11 @@
 
   0%,
   100% {
-    box-shadow: 0 -8px 40px hsla(36, 100%, 58%, 0.4);
+    box-shadow: 0 -8px 40px hsla(186, 100%, 54%, 0.4);
   }
 
   50% {
-    box-shadow: 0 -8px 70px hsla(36, 100%, 58%, 0.7);
-  }
-}
-
-/*  Animations  */
-
-.scan-anim {
-  animation: scan-bob 1s ease-in-out infinite;
-}
-
-@keyframes scan-bob {
-
-  0%,
-  100% {
-    transform: translateY(0) scale(1);
-  }
-
-  50% {
-    transform: translateY(-8px) scale(1.06);
-  }
-}
-
-@keyframes slide-up {
-  from {
-    transform: translateY(20px);
-    opacity: 0;
-  }
-
-  to {
-    transform: translateY(0);
-    opacity: 1;
+    box-shadow: 0 -8px 70px hsla(186, 100%, 54%, 0.7);
   }
 }
 
@@ -634,12 +638,11 @@
 
 @media (min-width: 520px) {
   .shop-phone {
-    border: 2px solid hsl(var(--border));
+    border: 1px solid hsla(0, 0%, 100%, 0.12);
     border-radius: 32px;
-    margin-top: 16px;
-    margin-bottom: 16px;
-    height: calc(100dvh - 32px);
-    box-shadow: 0 20px 60px hsla(0, 0%, 0%, 0.6);
     overflow: hidden;
+    box-shadow:
+      0 32px 90px rgba(0, 0, 0, 0.5),
+      inset 0 1px 0 hsla(0, 0%, 100%, 0.08);
   }
 }
