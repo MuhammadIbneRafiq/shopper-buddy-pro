@@ -2,11 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 
-// In Vercel, includeFiles copies src/data/ next to the function bundle.
-// Locally (Vite SSR), cwd() is the project root.
-const DATA_DIR = process.env.VERCEL
-  ? join(__dirname, 'src/data')
-  : join(process.cwd(), 'src/data');
+const DATA_DIR = join(process.cwd(), 'src/data');
 
 let INDEX: any[] | null = null;
 let EMBEDDINGS: Float32Array | null = null;
