@@ -1,0 +1,8 @@
+{
+  "functions": {
+    "api/rag.ts": {
+      "maxDuration": 60,
+      "includeFiles": "src/data/catalog-index.json|src/data/catalog-embeddings.bin"
+    }
+  }
+}

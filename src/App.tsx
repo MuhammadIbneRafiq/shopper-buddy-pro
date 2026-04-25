@@ -5,7 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import ShopPhone from "./pages/ShopPhone";
 
-// AUTH REMOVED — all auth imports and Protected wrapper commented out
+// AUTH REMOVED  all auth imports and Protected wrapper commented out
 // import Auth from "./pages/Auth";
 // import AppLayout from "./components/AppLayout";
 // import Shop from "./pages/Shop";
@@ -15,7 +15,7 @@ import ShopPhone from "./pages/ShopPhone";
 // import { useAuth } from "./hooks/useAuth";
 // function Protected({ children }: { children: React.ReactNode }) {
 //   const { user, loading } = useAuth();
-//   if (loading) return <div>Loading…</div>;
+//   if (loading) return <div>Loading</div>;
 //   if (!user) return <Navigate to="/auth" replace />;
 //   return <>{children}</>;
 // }
@@ -32,7 +32,7 @@ const App = () => (
           {/* Simplified: single phone-mode page, no auth required */}
           <Route path="*" element={<ShopPhone />} />
 
-          {/* OLD ROUTES — commented out
+          {/* OLD ROUTES  commented out
           <Route path="/" element={<Index />} />
           <Route path="/auth" element={<Auth />} />
           <Route element={<Protected><AppLayout /></Protected>}>

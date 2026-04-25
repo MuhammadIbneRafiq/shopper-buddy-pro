@@ -6,28 +6,28 @@ import { classifyVoiceIntent } from "@/lib/rag-buckets";
 import { toast } from "sonner";
 
 /*
-  â•"â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—
-  â•'  SHOPPER BUDDY â€" Flow (from whiteboard)                     â•'
-  â•'                                                             â•'
-  â•'  1. Scan  â†'  TTS: product description                       â•'
-  â•'  2. "Add to basket?"                                        â•'
-  â•'       Single tap  = YES  â†'  "How many?"                     â•'
-  â•'       Double tap  = NO   â†'  skip, back to scan              â•'
-  â•'  3. Tap N times   = quantity  (TTS speaks each number)      â•'
-  â•'     2.5 s silence = auto-add                                â•'
-  â•'     Hold          = add immediately                         â•'
-  â•'  4. Back to scan                                            â•'
-  â•'                                                             â•'
-  â•'  Setup  (first launch):                                     â•'
-  â•'    Single tap = button mode                                 â•'
-  â•'    Hold       = voice mode                                  â•'
-  â•'                                                             â•'
-  â•'  "Explain only available functions"                         â•'
-  â•'  â†' TTS only announces what the button can do RIGHT NOW      â•'
-  â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+
+    SHOPPER BUDDY  Flow (from whiteboard)
+
+    1. Scan    TTS: product description
+    2. "Add to basket?"
+         Single tap  = YES    "How many?"
+         Double tap  = NO     skip, back to scan
+    3. Tap N times   = quantity  (TTS speaks each number)
+       2.5 s silence = auto-add
+       Hold          = add immediately
+    4. Back to scan
+
+    Setup  (first launch):
+      Single tap = button mode
+      Hold       = voice mode
+
+    "Explain only available functions"
+     TTS only announces what the button can do RIGHT NOW
+
 */
 
-// â"€â"€ TYPES â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+//  TYPES
 
 type AppState =
     | "setup"     // choosing mode
@@ -54,58 +54,38 @@ interface BasketItem {
     qty: number;
 }
 
-// â"€â"€ DEMO PRODUCTS â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
-
-// € is the Unicode escape for € — immune to file-encoding issues
-const fmtPrice = (euros: number) => `€${euros.toFixed(2)}`;
+//  DEMO PRODUCTS
 
 const DEMO_PRODUCTS: Product[] = [
-    { name: "Whole Milk 1L",      brand: "Albert Heijn",  price: 1.29, currency: "EUR", tts: "Whole milk, one litre, Albert Heijn, one euro twenty-nine cents." },
-    { name: "Sliced Bread",       brand: "Bolletje",      price: 2.49, currency: "EUR", tts: "Sliced wholemeal bread, Bolletje, two euros forty-nine cents." },
-    { name: "Free-Range Eggs 10x",brand: "Jumbo",         price: 3.19, currency: "EUR", tts: "Ten free-range eggs, Jumbo, three euros nineteen cents." },
-    { name: "Bananas 1kg",        brand: "Chiquita",      price: 1.79, currency: "EUR", tts: "One kilogram of Chiquita bananas, one euro seventy-nine cents." },
-    { name: "Gouda Cheese 400g",  brand: "Beemster",      price: 4.99, currency: "EUR", tts: "Beemster Gouda cheese, four hundred grams, four euros ninety-nine cents." },
-    { name: "Orange Juice 1.5L",  brand: "Appelsientje",  price: 2.89, currency: "EUR", tts: "Appelsientje orange juice, one and a half litres, two euros eighty-nine cents." },
+    { name: "Whole Milk 1L", brand: "Albert Heijn", price: 1.29, currency: "", tts: "Whole milk, one litre, Albert Heijn, one euro twenty-nine cents." },
+    { name: "Sliced Bread", brand: "Bolletje", price: 2.49, currency: "", tts: "Sliced wholemeal bread, Bolletje, two euros forty-nine cents." },
+    { name: "Free-Range Eggs 10x", brand: "Jumbo", price: 3.19, currency: "", tts: "Ten free-range eggs, Jumbo, three euros nineteen cents." },
+    { name: "Bananas 1kg", brand: "Chiquita", price: 1.79, currency: "", tts: "One kilogram of Chiquita bananas, one euro seventy-nine cents." },
+    { name: "Gouda Cheese 400g", brand: "Beemster", price: 4.99, currency: "", tts: "Beemster Gouda cheese, four hundred grams, four euros ninety-nine cents." },
+    { name: "Orange Juice 1.5L", brand: "Appelsientje", price: 2.89, currency: "", tts: "Appelsientje orange juice, one and a half litres, two euros eighty-nine cents." },
 ];
 
 function randomProduct(): Product {
     return DEMO_PRODUCTS[Math.floor(Math.random() * DEMO_PRODUCTS.length)];
 }
 
-const SPOKEN_NUMBERS: Record<string, number> = {
-    "zero":0,"one":1,"two":2,"three":3,"four":4,"five":5,
-    "six":6,"seven":7,"eight":8,"nine":9,"ten":10,
-    "eleven":11,"twelve":12,"thirteen":13,"fourteen":14,"fifteen":15,
-    "sixteen":16,"seventeen":17,"eighteen":18,"nineteen":19,"twenty":20,
-};
-
-function parseSpokenNumber(text: string): number | null {
-    // Extract any digit sequence from anywhere in the phrase ("I want 4 pieces" -> 4)
-    const m = text.match(/\b(\d+)\b/);
-    if (m) { const n = parseInt(m[1]); if (n > 0) return n; }
-    for (const [word, val] of Object.entries(SPOKEN_NUMBERS)) {
-        if (text.includes(word)) return val;
-    }
-    return null;
-}
-
-// â"€â"€ SPEECH RECOGNITION HOOK â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+//  SPEECH RECOGNITION HOOK
 
 interface SpeechRecognitionInstance {
     continuous: boolean;
     interimResults: boolean;
     lang: string;
-    onresult:     ((e: any) => void) | null;
-    onerror:      ((e: any) => void) | null;
-    onend:        (() => void) | null;
-    onstart:      (() => void) | null;
+    onresult: ((e: any) => void) | null;
+    onerror: ((e: any) => void) | null;
+    onend: (() => void) | null;
+    onstart: (() => void) | null;
     onaudiostart: (() => void) | null;
     onsoundstart: (() => void) | null;
-    onspeechstart:(() => void) | null;
-    onspeechend:  (() => void) | null;
-    onaudioend:   (() => void) | null;
+    onspeechstart: (() => void) | null;
+    onspeechend: (() => void) | null;
+    onaudioend: (() => void) | null;
     start: () => void;
-    stop:  () => void;
+    stop: () => void;
 }
 
 type SpeechRecognitionConstructor = new () => SpeechRecognitionInstance;
@@ -179,12 +159,12 @@ function useSpeechRecognition() {
             rec.onerror = (e: any) => {
                 const code: string = e?.error ?? "unknown";
                 const hints: Record<string, string> = {
-                    "not-allowed":        "Microphone permission denied — allow mic in browser settings",
-                    "service-not-allowed":"Service blocked — use localhost or HTTPS",
-                    "audio-capture":      "No microphone found or already in use",
-                    "no-speech":          "No speech detected (silence timeout)",
-                    "network":            "Network error communicating with speech service",
-                    "aborted":            "Recognition aborted (normal if stopListening was called)",
+                    "not-allowed": "Microphone permission denied — allow mic in browser settings",
+                    "service-not-allowed": "Service blocked — use localhost or HTTPS",
+                    "audio-capture": "No microphone found or already in use",
+                    "no-speech": "No speech detected (silence timeout)",
+                    "network": "Network error communicating with speech service",
+                    "aborted": "Recognition aborted (normal if stopListening was called)",
                 };
                 console.warn(`[SR] ⚠️ onerror: ${code} — ${hints[code] ?? "no hint available"}`);
 
@@ -206,13 +186,13 @@ function useSpeechRecognition() {
                 setListeningSync(false);
             };
 
-            rec.onstart      = () => console.log("[SR] onstart: recognition started, waiting for speech...");
+            rec.onstart = () => console.log("[SR] onstart: recognition started, waiting for speech...");
             rec.onaudiostart = () => console.log("[SR] onaudiostart: microphone opened");
             rec.onsoundstart = () => console.log("[SR] onsoundstart: sound detected");
-            rec.onspeechstart= () => { speechStartedRef.current = true;  console.log("[SR] onspeechstart: speech detected"); };
-            rec.onspeechend  = () => console.log("[SR] onspeechend: speech stopped, processing...");
-            rec.onaudioend   = () => console.log("[SR] onaudioend: microphone closed");
-            rec.onend        = () => { speechStartedRef.current = false; setListeningSync(false); console.log("[SR] onend: session ended"); };
+            rec.onspeechstart = () => { speechStartedRef.current = true; console.log("[SR] onspeechstart: speech detected"); };
+            rec.onspeechend = () => console.log("[SR] onspeechend: speech stopped, processing...");
+            rec.onaudioend = () => console.log("[SR] onaudioend: microphone closed");
+            rec.onend = () => { speechStartedRef.current = false; setListeningSync(false); console.log("[SR] onend: session ended"); };
 
             recRef.current = rec;
             try {
@@ -243,9 +223,7 @@ function useSpeechRecognition() {
     return { listening, listeningRef, transcript, startListening, stopListening, setTranscript };
 }
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-// â"€â"€ MAIN COMPONENT â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+//  MAIN COMPONENT
 
 export default function ShopPhone() {
     const videoRef = useRef<HTMLVideoElement>(null);
@@ -276,12 +254,12 @@ export default function ShopPhone() {
     const { listening, listeningRef, transcript, startListening, stopListening, setTranscript } =
         useSpeechRecognition();
 
-    // Stable refs â€" read these inside timer callbacks to avoid stale closures
+    // Stable refs  read these inside timer callbacks to avoid stale closures
     const appStateRef = useRef(appState);
     const inputModeRef = useRef(inputMode);
     const basketRef = useRef(basket);
     const productRef = useRef(product);
-    useEffect(() => { appStateRef.current = appState;   console.log(`[State] appState → ${appState}`); }, [appState]);
+    useEffect(() => { appStateRef.current = appState; console.log(`[State] appState → ${appState}`); }, [appState]);
     useEffect(() => { inputModeRef.current = inputMode; console.log(`[State] inputMode → ${inputMode}`); }, [inputMode]);
     useEffect(() => { basketRef.current = basket; }, [basket]);
     useEffect(() => { productRef.current = product; }, [product]);
@@ -292,14 +270,14 @@ export default function ShopPhone() {
             console.log("[Init] speaking welcome prompt");
             speak("Welcome to Shopper Buddy. Press the button once for button mode: tap to scan and navigate. Or hold the button for voice mode: hold and speak your commands.");
         }, 700);
-        return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+        return () => { cancelled = true; clearTimeout(t); };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    // â"€â"€ Cleanup â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+    //  Cleanup
     useEffect(() => () => { stopSpeaking(); }, []);
 
-    // â"€â"€ Camera â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+    //  Camera
     async function startCamera() {
         try {
             const stream = await navigator.mediaDevices.getUserMedia({
@@ -307,11 +285,16 @@ export default function ShopPhone() {
             });
             if (videoRef.current) {
                 videoRef.current.srcObject = stream;
+                await new Promise<void>((res) => {
+                    const v = videoRef.current!;
+                    if (v.readyState >= 1) { res(); return; }
+                    v.onloadedmetadata = () => res();
+                });
                 await videoRef.current.play();
             }
             setCameraOn(true);
         } catch {
-            toast.message("Camera unavailable - using demo mode");
+            toast.message("Camera unavailable  using demo mode");
             setCameraOn(true);
         }
     }
@@ -324,7 +307,7 @@ export default function ShopPhone() {
 
     useEffect(() => () => { stopSpeaking(); stopCamera(); }, []);
 
-    // â"€â"€ Step handlers â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+    //  Step handlers
 
     /** STEP 1: Scan product (press button once) */
     async function handleScan() {
@@ -372,19 +355,27 @@ export default function ShopPhone() {
             }
 
             const data = await response.json();
-            
+
+            // No product visible - never guess
+            if (data.no_product) {
+                speak(data.error || "No product visible. Please point the camera at a product.");
+                setAppState("idle");
+                return;
+            }
+
             if (!data.success || !data.match || !data.match.product) {
                 throw new Error(data.error || "No match found from RAG pipeline");
             }
 
-            // Convert backend product schema to the frontend schema
             const p = data.match.product;
+            const confidence = data.match.confidence ?? 0;
+            const confidenceNote = confidence < 0.5 ? " I am not very certain about this match." : "";
             const scanned: Product = {
                 name: p.name,
-                brand: p.brand || 'Unknown',
+                brand: p.supermarket || 'Unknown',
                 price: parseFloat(p.price) || 0,
-                currency: "€",
-                tts: `I found ${p.name}. The price is ${p.price} euros. ${data.match.reasoning}`
+                currency: "",
+                tts: `I found ${p.name} from ${p.supermarket}. The price is ${p.price} euros.${confidenceNote} ${data.match.reasoning}`
             };
 
             setProduct(scanned);
@@ -393,20 +384,18 @@ export default function ShopPhone() {
             // Speak the product description
             speak(scanned.tts + " Would you like to add this to your basket?");
         } catch (e) {
-            console.error("Scan error:", e);
-            speak("Sorry, I had trouble analyzing the image. Using demo product.");
-            const scanned = randomProduct();
-            setProduct(scanned);
-            setAppState("scanned");
-            speak(scanned.tts + " Would you like to add this to your basket?");
+            const msg = e instanceof Error ? e.message : String(e);
+            console.error("Scan error:", msg);
+            toast.error("Scan failed: " + msg);
+            speak("Sorry, I could not identify the product. Please try again.");
+            setAppState("idle");
         }
-        setCameraOn(true); // demo mode
     }
 
     // REMOVED PREMATURE CLOSING BRACE HERE
 
 
-    // â"€â"€ Read basket aloud â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+    //  Read basket aloud
     function readBasket() {
         const b = basketRef.current;
         if (b.length === 0) {
@@ -420,34 +409,7 @@ export default function ShopPhone() {
         setAppState("checkout");
     }
 
-    function doRemoveFromBasket(hint?: string) {
-        const b = basketRef.current;
-        if (b.length === 0) { speak("Your basket is already empty."); return; }
-        if (hint && hint.trim().length > 1) {
-            const h = hint.toLowerCase();
-            const item = b.find(i =>
-                i.product.name.toLowerCase().split(" ").some(w => w.length > 2 && h.includes(w))
-            );
-            if (item) {
-                setBasket(prev => item.qty > 1
-                    ? prev.map(i => i.product.name === item.product.name ? { ...i, qty: i.qty - 1 } : i)
-                    : prev.filter(i => i.product.name !== item.product.name)
-                );
-                speak(`Removed one ${item.product.name}.`);
-            } else {
-                speak("I could not find that item in your basket.");
-            }
-        } else {
-            const last = b[b.length - 1];
-            setBasket(prev => last.qty > 1
-                ? prev.map(i => i.product.name === last.product.name ? { ...i, qty: i.qty - 1 } : i)
-                : prev.slice(0, -1)
-            );
-            speak(`Removed ${last.product.name}.`);
-        }
-    }
-
-    // â"€â"€ Bunq Payment â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+    //  Bunq Payment
     async function doPayment() {
         const total = basketRef.current.reduce((s, i) => s + i.product.price * i.qty, 0);
         if (total === 0) {
@@ -476,12 +438,12 @@ export default function ShopPhone() {
         }
     }
 
-    // â"€â"€ Scan â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+    //  Scan
     async function doScan() {
         await handleScan();
     }
 
-    // â"€â"€ Skip product (double-tap in scanned state) â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+    //  Skip product (double-tap in scanned state)
     function doSkip() {
         if (qtyTimerRef.current) { clearTimeout(qtyTimerRef.current); qtyTimerRef.current = null; }
         if (doubleTapTimerRef.current) { clearTimeout(doubleTapTimerRef.current); doubleTapTimerRef.current = null; }
@@ -492,7 +454,7 @@ export default function ShopPhone() {
         speak("Skipped.");
     }
 
-    // â"€â"€ Accept product (single-tap in scanned state) â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+    //  Accept product (single-tap in scanned state)
     function doAccept() {
         setAppState("quantity");
         qtyRef.current = 0;
@@ -503,7 +465,7 @@ export default function ShopPhone() {
         speak(prompt);
     }
 
-    // â"€â"€ Commit qty items to basket â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+    //  Commit qty items to basket
     function doAddToBasket(count: number) {
         const p = productRef.current;
         if (!p || count < 1) return;
@@ -531,12 +493,12 @@ export default function ShopPhone() {
         }, 2000);
     }
 
-    // â"€â"€ Increment tap counter (quantity state) â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+    //  Increment tap counter (quantity state)
     function incrementQty() {
         const next = qtyRef.current + 1;
         qtyRef.current = next;
         setQty(next);
-        speak(String(next)); // TTS: "One", "Two", "Three"â€¦
+        speak(String(next)); // TTS: "One", "Two", "Three"
 
         // Reset auto-confirm countdown on every tap
         if (qtyTimerRef.current) clearTimeout(qtyTimerRef.current);
@@ -545,13 +507,13 @@ export default function ShopPhone() {
         }, QTY_CONFIRM_MS);
     }
 
-    // â"€â"€ SHORT PRESS handler (context-aware) â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+    //  SHORT PRESS handler (context-aware)
     function handleShortPress() {
         const state = appStateRef.current;
         const mode = inputModeRef.current;
         console.log(`[Button] shortPress | state: ${state} | mode: ${mode}`);
 
-        // â"€â"€ Setup: choose button mode â"€â"€
+        //  Setup: choose button mode
         if (state === "setup") {
             setInputMode("button");
             setAppState("idle");
@@ -567,16 +529,16 @@ export default function ShopPhone() {
 
             } else if (state === "scanned") {
                 // Double-tap detection:
-                // If a tap already happened within the window â†' double-tap = skip
+                // If a tap already happened within the window  double-tap = skip
                 if (doubleTapTimerRef.current) {
                     clearTimeout(doubleTapTimerRef.current);
                     doubleTapTimerRef.current = null;
                     doSkip();
                 } else {
-                    // First tap â€" wait to see if a second arrives
+                    // First tap  wait to see if a second arrives
                     doubleTapTimerRef.current = setTimeout(() => {
                         doubleTapTimerRef.current = null;
-                        doAccept(); // single-tap confirmed â†' go to quantity
+                        doAccept(); // single-tap confirmed  go to quantity
                     }, DOUBLE_TAP_MS);
                 }
 
@@ -595,13 +557,13 @@ export default function ShopPhone() {
         }
     }
 
-    // â"€â"€ HOLD handler (context-aware) â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+    //  HOLD handler (context-aware)
     function handleHoldFire() {
         const state = appStateRef.current;
         const mode = inputModeRef.current;
         console.log(`[Button] holdFire | state: ${state} | mode: ${mode}`);
 
-        // â"€â"€ Setup: choose voice mode â"€â"€
+        //  Setup: choose voice mode
         if (state === "setup") {
             setInputMode("voice");
             setAppState("idle");
@@ -615,7 +577,7 @@ export default function ShopPhone() {
                 if (qtyRef.current > 0) {
                     doAddToBasket(qtyRef.current);
                 } else {
-                    // Nothing counted yet â†' cancel
+                    // Nothing counted yet  cancel
                     if (qtyTimerRef.current) { clearTimeout(qtyTimerRef.current); qtyTimerRef.current = null; }
                     setAppState("idle");
                     setProduct(null);
@@ -626,7 +588,7 @@ export default function ShopPhone() {
                 if (doubleTapTimerRef.current) { clearTimeout(doubleTapTimerRef.current); doubleTapTimerRef.current = null; }
                 readBasket();
             } else {
-                // idle, added, etc. â†' read basket
+                // idle, added, etc.  read basket
                 readBasket();
             }
         } else if (mode === "voice") {
@@ -636,7 +598,7 @@ export default function ShopPhone() {
         }
     }
 
-    // â"€â"€ Hold release â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+    //  Hold release
     function handleHoldRelease() {
         if (inputModeRef.current === "voice") {
             setIsHolding(false);
@@ -644,7 +606,7 @@ export default function ShopPhone() {
         }
     }
 
-    // â"€â"€ Pointer events â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+    //  Pointer events
     function onPointerDown(e: React.PointerEvent) {
         (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
         holdFiredRef.current = false;
@@ -670,60 +632,32 @@ export default function ShopPhone() {
         holdFiredRef.current = false;
     }
 
-    // â"€â"€ Voice transcript processing â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+    //  Voice transcript processing
     useEffect(() => {
         if (!transcript) return;
         const lower = transcript.toLowerCase().trim();
         const state = appStateRef.current;
-        console.log(`[Transcript] "${transcript}" | state: ${state}`);
-        setTranscript("");
-
-        if (import.meta.env.DEV) {
-            const { topLabel, topScore, runnerUpId, runnerUpScore } = classifyVoiceIntent(lower);
-            toast(`"${transcript}"`, {
-                description: `${topLabel} (${topScore.toFixed(2)}) / ${runnerUpId} (${runnerUpScore.toFixed(2)})`,
-                duration: 3000,
-            });
-        }
-
-        // Button-only states — ignore voice
-        if (state === "setup" || state === "scanning" || state === "paying") return;
-
-        // ── Universal commands (work in any active state) ──────────────────
-
-        // Basket comparison: "is there more than 20 euros in my basket?"
-        const euroMatch = lower.match(/\b(\d+(?:[.,]\d+)?)\s*(?:euro|euros|eur)/);
-        if (euroMatch) {
-            const amount = parseFloat(euroMatch[1].replace(",", "."));
-            const total = basketRef.current.reduce((s, i) => s + i.product.price * i.qty, 0);
-            if (lower.includes("more than") || lower.includes("over") || lower.includes("above") || lower.includes("exceed")) {
-                speak(total > amount
-                    ? `Yes, your basket is ${total.toFixed(2)} euros, which is more than ${amount} euros.`
-                    : `No, your basket is only ${total.toFixed(2)} euros, which is less than ${amount} euros.`);
-                return;
+        //  Setup: voice picks mode
+        if (state === "setup") {
+            if (lower.includes("voice")) {
+                setInputMode("voice");
+                setAppState("idle");
+                speak("Voice mode selected. I'll listen after each prompt. Say scan to start.").then(() => startListening());
+            } else if (lower.includes("button")) {
+                setInputMode("button");
+                setAppState("idle");
+                speak("Button mode selected. Press the big button to scan.");
+            } else {
+                // Didn't understand  ask again
+                speak("Say button or voice.").then(() => startListening());
             }
-            if (lower.includes("less than") || lower.includes("under") || lower.includes("below")) {
-                speak(total < amount
-                    ? `Yes, your basket is ${total.toFixed(2)} euros, which is less than ${amount} euros.`
-                    : `No, your basket is ${total.toFixed(2)} euros, which is more than ${amount} euros.`);
-                return;
-            }
-        }
-
-        // Remove / undo
-        if (lower.includes("remove") || lower.includes("delete") || lower.includes("take out") ||
-            lower.includes("undo") || lower.includes("take back")) {
-            const isLast = lower.includes("last") || lower.includes("latest") ||
-                           lower.includes("that") || lower.includes("undo");
-            const hint = isLast ? undefined
-                : lower.replace(/\b(remove|delete|take out|take back|the|a|an|from (?:my )?(?:basket|cart))\b/g, "").trim() || undefined;
-            doRemoveFromBasket(hint);
+            setTranscript("");
             return;
         }
 
         // Basket / total questions
         if ((lower.includes("basket") || lower.includes("cart") || lower.includes("total") ||
-             lower.includes("how much") || lower.includes("what have i") || lower.includes("what do i have")) &&
+            lower.includes("how much") || lower.includes("what have i") || lower.includes("what do i have")) &&
             state !== "scanned" && state !== "quantity") {
             readBasket();
             return;
@@ -732,17 +666,18 @@ export default function ShopPhone() {
         // ── State-specific handlers ────────────────────────────────────────
 
         if (state === "scanned") {
-            const num = parseSpokenNumber(lower);
-            if (num !== null) {
-                // "I want 4" / "three please" -> add that quantity immediately, no follow-up
+            // User responded to "add to basket?"
+            const num = parseInt(lower);
+            if (!isNaN(num) && num > 0) {
+                // Said a specific number  accept with that quantity
                 doAddToBasket(num);
             } else if (lower.includes("yes") || lower.includes("add") || lower.includes("yeah") ||
-                       lower.includes("sure") || lower.includes("ok") || lower.includes("please") ||
-                       lower.includes("want") || lower.includes("take it")) {
+                lower.includes("sure") || lower.includes("ok") || lower.includes("please") ||
+                lower.includes("want") || lower.includes("take it")) {
                 doAccept(); // affirmative without a number -> ask how many
             } else if (lower.includes("no") || lower.includes("skip") || lower.includes("nope") ||
-                       lower.includes("next") || lower.includes("pass") || lower.includes("cancel") ||
-                       lower.includes("don't") || lower.includes("dont")) {
+                lower.includes("next") || lower.includes("pass") || lower.includes("cancel") ||
+                lower.includes("don't") || lower.includes("dont")) {
                 doSkip();
             }
 
@@ -751,10 +686,10 @@ export default function ShopPhone() {
             if (num !== null && num > 0) {
                 doAddToBasket(num);
             } else if (lower.includes("done") || lower.includes("confirm") || lower.includes("yes") ||
-                       lower.includes("add") || lower.includes("that") || lower.includes("ok")) {
+                lower.includes("add") || lower.includes("that") || lower.includes("ok")) {
                 doAddToBasket(Math.max(1, qtyRef.current));
             } else if (lower.includes("cancel") || lower.includes("no") || lower.includes("skip") ||
-                       lower.includes("back") || lower.includes("never mind") || lower.includes("nevermind")) {
+                lower.includes("back") || lower.includes("never mind") || lower.includes("nevermind")) {
                 if (qtyTimerRef.current) { clearTimeout(qtyTimerRef.current); qtyTimerRef.current = null; }
                 qtyRef.current = 0;
                 setQty(0);
@@ -768,7 +703,7 @@ export default function ShopPhone() {
                 lower.includes("add") || lower.includes("price")) {
                 doScan();
             } else if (lower.includes("checkout") || lower.includes("pay") ||
-                       lower.includes("done shopping") || lower.includes("finish")) {
+                lower.includes("done shopping") || lower.includes("finish")) {
                 readBasket(); // read basket first so user hears total before confirming
             }
 
@@ -777,7 +712,7 @@ export default function ShopPhone() {
                 lower.includes("proceed") || lower.includes("sure") || lower.includes("ok")) {
                 doPayment();
             } else if (lower.includes("no") || lower.includes("cancel") || lower.includes("back") ||
-                       lower.includes("wait") || lower.includes("not yet")) {
+                lower.includes("wait") || lower.includes("not yet")) {
                 setAppState("idle");
                 speak("OK, back to shopping.");
             }
@@ -785,7 +720,7 @@ export default function ShopPhone() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [transcript]);
 
-    // â"€â"€ Derived values â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+    //  Derived values
     const basketTotal = basket.reduce((s, b) => s + b.product.price * b.qty, 0);
     const basketCount = basket.reduce((s, b) => s + b.qty, 0);
 
@@ -800,11 +735,11 @@ export default function ShopPhone() {
                             "shop-phone__main-btn--idle",
     ].join(" ");
 
-    // â"€â"€ Render â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+    //  Render
     return (
         <div className="shop-phone">
 
-            {/* â•â• TOP 70%: camera + minimal info â•â• */}
+            {/*  TOP 70%: camera + minimal info  */}
             <div className="shop-phone__top">
 
                 <video ref={videoRef} className="shop-phone__video" playsInline muted />
@@ -820,7 +755,7 @@ export default function ShopPhone() {
                         <div className="shop-phone__basket-pill" aria-label={`${basketCount} items`}>
                             <ShoppingCart size={16} />
                             <span>{basketCount}</span>
-                            <span className="shop-phone__basket-total-pill">{fmtPrice(basketTotal)}</span>
+                            <span className="shop-phone__basket-total-pill">{basketTotal.toFixed(2)}</span>
                         </div>
                     )}
                 </div>
@@ -841,7 +776,7 @@ export default function ShopPhone() {
                     </div>
                 )}
 
-                {/* Product info â€" shown while scanned / counting / added */}
+                {/* Product info  shown while scanned / counting / added */}
                 {(appState === "scanned" || appState === "quantity" || appState === "added") && product && (
                     <div className={`shop-phone__product-overlay ${appState === "added" ? "shop-phone__product-overlay--added" :
                         appState === "quantity" ? "shop-phone__product-overlay--quantity" :
@@ -885,7 +820,7 @@ export default function ShopPhone() {
                 )}
             </div>
 
-            {/* â•â• BOTTOM 30%: THE one big button â•â• */}
+            {/*  BOTTOM 30%: THE one big button  */}
             <div className="shop-phone__action-bar">
                 <button
                     id="main-btn"

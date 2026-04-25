@@ -29,7 +29,7 @@ export default function Shop() {
       if (videoRef.current) { videoRef.current.srcObject = s; await videoRef.current.play(); }
       setStreaming(true);
     } catch {
-      toast.message("Camera unavailable — using demo mode");
+      toast.message("Camera unavailable  using demo mode");
       setStreaming(true);
     }
   }
@@ -76,7 +76,7 @@ export default function Shop() {
     const { error } = await supabase.functions.invoke("notify-helper", {
       body: {
         kind: "product_check",
-        question: `Can you confirm this product and price? ${verdict.product.name} — ${verdict.product.currency} ${verdict.product.price}`,
+        question: `Can you confirm this product and price? ${verdict.product.name}  ${verdict.product.currency} ${verdict.product.price}`,
         ai_summary: verdict.speak,
       },
     });
@@ -109,7 +109,7 @@ export default function Shop() {
         <Button onClick={captureAndAnalyze} disabled={busy} size="lg"
           className="h-20 text-xl gradient-warm text-secondary-foreground border-0 shadow-strong">
           {busy ? <RefreshCw className="w-6 h-6 mr-2 animate-spin" /> : <Mic className="w-6 h-6 mr-2" />}
-          {busy ? "Analyzing…" : "Identify & check budget"}
+          {busy ? "Analyzing" : "Identify & check budget"}
         </Button>
         <Button onClick={askHelper} disabled={!verdict} size="lg" variant="outline" className="h-20 text-xl">
           <HelpingHand className="w-6 h-6 mr-2" /> Ask my helper
@@ -146,7 +146,7 @@ export default function Shop() {
           </div>
 
           <div className="mt-3 text-xs text-muted-foreground">
-            Source: {verdict.product.source} · confidence {(verdict.product.confidence * 100).toFixed(0)}%
+            Source: {verdict.product.source}  confidence {(verdict.product.confidence * 100).toFixed(0)}%
           </div>
         </Card>
       )}

@@ -72,7 +72,7 @@ export default function Budget() {
       <Card className="p-6 shadow-soft">
         <div className="flex items-center gap-3 mb-4">
           <Wallet className="w-6 h-6 text-primary" />
-          <h2 className="text-xl font-bold">This month — groceries</h2>
+          <h2 className="text-xl font-bold">This month  groceries</h2>
         </div>
         <div className="flex justify-between text-base mb-2">
           <span>Spent {budget?.currency ?? "EUR"} {spent.toFixed(2)}</span>
@@ -107,7 +107,7 @@ export default function Budget() {
               <div className="text-2xl font-bold">EUR {Number(account.grocery_spent_this_month).toFixed(2)}</div>
             </div>
           </div>
-        ) : <p className="text-muted-foreground">Loading…</p>}
+        ) : <p className="text-muted-foreground">Loading</p>}
       </Card>
 
       <Card className="p-6 shadow-soft">

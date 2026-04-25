@@ -64,7 +64,7 @@ export default function Auth() {
               {mode === "signup" ? "Create your account" : "Sign in"}
             </h2>
             <p className="text-muted-foreground">
-              {mode === "signup" ? "Join Beacon — your shopping companion." : "Welcome back to Beacon."}
+              {mode === "signup" ? "Join Beacon  your shopping companion." : "Welcome back to Beacon."}
             </p>
           </header>
 
@@ -76,7 +76,7 @@ export default function Auth() {
                   <Input id="name" value={displayName} onChange={(e) => setDisplayName(e.target.value)} required className="h-12 text-base" />
                 </div>
                 <div>
-                  <Label className="text-base mb-2 block">I am…</Label>
+                  <Label className="text-base mb-2 block">I am</Label>
                   <div className="grid grid-cols-2 gap-3">
                     <button type="button" onClick={() => setRole("visually_impaired")}
                       className={`p-4 rounded-xl border-2 text-left transition-smooth ${role === "visually_impaired" ? "border-primary bg-accent" : "border-border"}`}>
@@ -102,7 +102,7 @@ export default function Auth() {
             </div>
 
             <Button type="submit" disabled={loading} size="lg" className="w-full h-14 text-lg gradient-hero text-primary-foreground border-0">
-              {loading ? "Please wait…" : mode === "signup" ? "Create account" : "Sign in"}
+              {loading ? "Please wait" : mode === "signup" ? "Create account" : "Sign in"}
             </Button>
           </form>
 

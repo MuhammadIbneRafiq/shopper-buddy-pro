@@ -1,5 +1,5 @@
 /**
- * RAG module — matches a scanned product against the Dutch supermarket dataset
+ * RAG module  matches a scanned product against the Dutch supermarket dataset
  * using Bedrock Claude with the full product catalog injected as context.
  * Falls back to local fuzzy match if Bedrock is unavailable.
  */
@@ -24,7 +24,7 @@ const catalog = PRODUCTS as DutchProduct[];
 
 // Build compact catalog string for context injection
 const CATALOG_CONTEXT = catalog.map(p =>
-  `[${p.id}] ${p.name} | ${p.brand} | ${p.supermarket} | €${p.price} | ${p.unit} | tags: ${p.tags.join(',')}`
+  `[${p.id}] ${p.name} | ${p.brand} | ${p.supermarket} | ${p.price} | ${p.unit} | tags: ${p.tags.join(',')}`
 ).join('\n');
 
 function getCredentials() {
@@ -35,7 +35,7 @@ function getCredentials() {
   };
 }
 
-// Local fuzzy fallback — score by tag/name overlap
+// Local fuzzy fallback  score by tag/name overlap
 function localFuzzyMatch(query: string): DutchProduct | null {
   const q = query.toLowerCase();
   let best: DutchProduct | null = null;
@@ -58,7 +58,7 @@ export async function ragLookup(rawProduct: { name: string; brand: string; descr
   const creds = getCredentials();
   if (!creds.accessKeyId) {
     const fallback = localFuzzyMatch(`${rawProduct.name} ${rawProduct.brand}`);
-    console.log('[RAG] No credentials — fuzzy fallback result:', fallback?.id ?? 'null');
+    console.log('[RAG] No credentials  fuzzy fallback result:', fallback?.id ?? 'null');
     return fallback;
   }
 
@@ -105,7 +105,7 @@ export async function scanAndMatch(base64Image: string): Promise<DutchProduct & 
     const { BedrockRuntimeClient, ConverseCommand } = await import('@aws-sdk/client-bedrock-runtime');
     const client = new BedrockRuntimeClient({ region: 'us-east-1', credentials: creds });
 
-    // Step 1: Vision — identify the product
+    // Step 1: Vision  identify the product
     const visionRes = await client.send(new ConverseCommand({
       modelId: 'anthropic.claude-3-haiku-20240307-v1:0',
       system: [{ text: 'You identify grocery products from images. Output ONLY valid JSON: {"name":"...","brand":"...","category":"...","description":"..."}' }],

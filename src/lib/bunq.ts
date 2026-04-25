@@ -49,7 +49,7 @@ export class BunqService {
       // Fallback: simulate locally
       if (this.fallbackBalance >= req.amount) {
         this.fallbackBalance -= req.amount;
-        return { success: true, transactionId: "tx_" + Math.random().toString(36).slice(2), message: `Payment of €${req.amount.toFixed(2)} successful.` };
+        return { success: true, transactionId: "tx_" + Math.random().toString(36).slice(2), message: `Payment of ${req.amount.toFixed(2)} successful.` };
       }
       return { success: false, transactionId: "failed", message: "Insufficient funds." };
     }
@@ -59,7 +59,7 @@ export class BunqService {
       const balStr = await this.getBalance();
       const balance = parseFloat(balStr);
       if (balance < req.amount) {
-        return { success: false, transactionId: "failed", message: `Insufficient funds. Balance: €${balance.toFixed(2)}, needed: €${req.amount.toFixed(2)}.` };
+        return { success: false, transactionId: "failed", message: `Insufficient funds. Balance: ${balance.toFixed(2)}, needed: ${req.amount.toFixed(2)}.` };
       }
 
       // Make payment via bunq draft payment (sandbox)
@@ -79,10 +79,10 @@ export class BunqService {
       if (res.ok) {
         const data = await res.json();
         const txId = String(data.Response?.[0]?.Id?.id ?? "tx_" + Date.now());
-        return { success: true, transactionId: txId, message: `Payment of €${req.amount.toFixed(2)} to ${req.counterparty} successful.` };
+        return { success: true, transactionId: txId, message: `Payment of ${req.amount.toFixed(2)} to ${req.counterparty} successful.` };
       }
 
-      // draft-payment may not be available in all sandbox tiers — fall back to request-inquiry
+      // draft-payment may not be available in all sandbox tiers  fall back to request-inquiry
       const res2 = await fetch(`${BASE}/user/${this.userId}/monetary-account/${this.accountId}/request-inquiry`, {
         method: "POST",
         headers: headers(this.sessionToken),
@@ -97,7 +97,7 @@ export class BunqService {
       if (res2.ok) {
         const data2 = await res2.json();
         const txId = String(data2.Response?.[0]?.Id?.id ?? "tx_" + Date.now());
-        return { success: true, transactionId: txId, message: `Payment of €${req.amount.toFixed(2)} processed.` };
+        return { success: true, transactionId: txId, message: `Payment of ${req.amount.toFixed(2)} processed.` };
       }
 
       return { success: false, transactionId: "failed", message: "Payment failed. Please try again." };
