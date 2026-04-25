@@ -145,9 +145,14 @@ export default function ShopPhone() {
     }
 
     function scannedProductPrompt(scanned: Product) {
+        const pricePart = Number.isFinite(scanned.price) && scanned.price > 0
+            ? `${scanned.price.toFixed(2)} euros`
+            : "price unknown";
+        const base = `Product recognized: ${scanned.name}. Price: ${pricePart}. Would you like to add this to your basket?`;
+
         return inputModeRef.current === "voice"
-            ? `${scanned.tts} Would you like to add this to your basket? Hold the button and say yes or no.`
-            : `${scanned.tts} Press once to add this to your basket. Double tap to skip it.`;
+            ? `${base} Hold the button and say yes or no.`
+            : `${base} Press once to add. Double tap to skip.`;
     }
 
     async function refreshBalance() {
