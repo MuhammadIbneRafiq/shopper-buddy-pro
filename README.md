@@ -158,12 +158,12 @@ Voice output:  speak(text) → OpenAI GPT-4o Realtime API → streaming PCM → 
 
 ### Serverless Functions (Vercel)
 
-| Function | Purpose | Timeout |
+| Function | Purpose |
 |---|---|---|
-| `api/rag.ts` | Product recognition, catalogue search | 60s |
-| `api/bunq/[...path].ts` | bunq API proxy (CORS) | 15s |
-| `api/embed-audio.ts` | Audio → Bedrock embedding | 30s |
-| `api/bucket-embeddings.ts` | Pre-computed intent bucket embeddings | 60s |
+| `api/rag.ts` | Product recognition, catalogue search |
+| `api/bunq/[...path].ts` | bunq API proxy (CORS) |
+| `api/embed-audio.ts` | Audio → Bedrock embedding |
+| `api/bucket-embeddings.ts` | Pre-computed intent bucket embeddings |
 
 ---
 
