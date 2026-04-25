@@ -255,18 +255,26 @@ export default function ShopPhone() {
 
             const data = await response.json();
 
+            // No product visible - never guess
+            if (data.no_product) {
+                speak(data.error || "No product visible. Please point the camera at a product.");
+                setAppState("idle");
+                return;
+            }
+
             if (!data.success || !data.match || !data.match.product) {
                 throw new Error(data.error || "No match found from RAG pipeline");
             }
 
-            // Convert backend product schema to the frontend schema
             const p = data.match.product;
+            const confidence = data.match.confidence ?? 0;
+            const confidenceNote = confidence < 0.5 ? " I am not very certain about this match." : "";
             const scanned: Product = {
                 name: p.name,
-                brand: p.brand || 'Unknown',
+                brand: p.supermarket || 'Unknown',
                 price: parseFloat(p.price) || 0,
                 currency: "",
-                tts: `I found ${p.name}. The price is ${p.price} euros. ${data.match.reasoning}`
+                tts: `I found ${p.name} from ${p.supermarket}. The price is ${p.price} euros.${confidenceNote} ${data.match.reasoning}`
             };
 
             setProduct(scanned);
