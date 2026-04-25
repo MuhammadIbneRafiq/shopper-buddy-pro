@@ -650,6 +650,7 @@ export default function ShopPhone() {
 
     //  Pointer events
     function onPointerDown(e: React.PointerEvent) {
+        void unlockIOSAudioFromGesture();
         (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
         holdFiredRef.current = false;
         holdTimerRef.current = setTimeout(() => {
