@@ -1,27 +1,22 @@
-/**
- * scripts/nova-sonic-runner.mjs
- * Called by vite.config.ts dev middleware.
- * Reads {audioBase64, systemPrompt} from stdin, writes {transcript, audioBase64} to stdout.
- */
 import { randomUUID } from 'crypto';
 import { readFileSync } from 'fs';
 import { BedrockRuntimeClient, InvokeModelWithBidirectionalStreamCommand } from '@aws-sdk/client-bedrock-runtime';
 import { NodeHttp2Handler } from '@smithy/node-http-handler';
 
-const env = readFileSync('.env', 'utf8');
-const get = (k) => process.env[k] ?? env.match(new RegExp(`${k}="([^"]+)"`))?.[1] ?? null;
+const env = readFileSync('.env', 'utf8').replace(/^\uFEFF/, '');
+const get = k => process.env[k] ?? env.match(new RegExp(`${k}="([^"]+)"`))?.[1] ?? null;
 
-const accessKeyId     = get('AWS_ACCESS_KEY_ID');
+const accessKeyId = get('AWS_ACCESS_KEY_ID');
 const secretAccessKey = get('AWS_SECRET_ACCESS_KEY');
-const sessionToken    = get('AWS_SESSION_TOKEN');
+const sessionToken = get('AWS_SESSION_TOKEN');
 
 if (!accessKeyId || !secretAccessKey) {
-  process.stderr.write('Missing AWS credentials\n');
-  process.exit(1);
+  process.stderr.write('Missing AWS credentials\n'); process.exit(1);
 }
 
-const input = JSON.parse(await new Promise(r => { let b=''; process.stdin.on('data',c=>b+=c); process.stdin.on('end',()=>r(b)); }));
-const { audioBase64, systemPrompt = 'You are a helpful shopping assistant. Keep responses short.' } = input;
+let raw = '';
+for await (const chunk of process.stdin) raw += chunk;
+const { audioBase64, systemPrompt = 'You are a helpful shopping assistant. Keep responses short.' } = JSON.parse(raw);
 
 const client = new BedrockRuntimeClient({
   region: 'us-east-1',

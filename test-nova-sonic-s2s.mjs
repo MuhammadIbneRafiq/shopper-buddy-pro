@@ -35,20 +35,25 @@ const accessKeyId     = getEnvVar('AWS_ACCESS_KEY_ID');
 const secretAccessKey = getEnvVar('AWS_SECRET_ACCESS_KEY');
 const sessionToken    = getEnvVar('AWS_SESSION_TOKEN');
 
-if (!accessKeyId || !secretAccessKey) {
-  console.error('❌ Missing AWS credentials.');
-  console.error('   Nova Sonic requires real SigV4 credentials — the Bearer token does NOT work.');
-  console.error('   Add to .env or set as env vars:');
-  console.error('     AWS_ACCESS_KEY_ID="ASIA..."');
-  console.error('     AWS_SECRET_ACCESS_KEY="..."');
-  console.error('     AWS_SESSION_TOKEN="..."  (if using temporary creds)');
-  console.error('');
-  console.error('   Get them from: aws sts get-session-token');
-  console.error('   Or from the AWS console → IAM → Security credentials');
+// Extract AccessKeyId + SessionToken from Bearer token if not set explicitly
+const bearerToken = getEnvVar('VITE_AWS_BEARER_TOKEN_BEDROCK');
+const resolvedAccessKeyId = accessKeyId ?? (() => {
+  const b64 = bearerToken?.replace('bedrock-api-key-', '') ?? '';
+  const qs = Buffer.from(b64, 'base64').toString().split('?')[1] ?? '';
+  return new URLSearchParams(qs).get('X-Amz-Credential')?.split('/')[0] ?? null;
+})();
+const resolvedSessionToken = sessionToken ?? (() => {
+  const b64 = bearerToken?.replace('bedrock-api-key-', '') ?? '';
+  const qs = Buffer.from(b64, 'base64').toString().split('?')[1] ?? '';
+  return decodeURIComponent(new URLSearchParams(qs).get('X-Amz-Security-Token') ?? '');
+})();
+
+if (!resolvedAccessKeyId || !secretAccessKey) {
+  console.error('❌ Missing AWS credentials. Need AWS_SECRET_ACCESS_KEY in .env');
   process.exit(1);
 }
 
-console.log('✅ Credentials found. AccessKeyId:', accessKeyId.slice(0, 8) + '...');
+console.log('✅ AccessKeyId:', resolvedAccessKeyId.slice(0, 8) + '...');
 
 // ─── Audio recording ──────────────────────────────────────────────────────────
 
@@ -97,9 +102,9 @@ async function runNovaSonic(pcmBuffer) {
   const client = new BedrockRuntimeClient({
     region: 'us-east-1',
     credentials: {
-      accessKeyId,
+      accessKeyId: resolvedAccessKeyId,
       secretAccessKey,
-      ...(sessionToken ? { sessionToken } : {}),
+      ...(resolvedSessionToken ? { sessionToken: resolvedSessionToken } : {}),
     },
     requestHandler: new NodeHttp2Handler({
       requestTimeout: 60000,
@@ -154,8 +159,12 @@ async function runNovaSonic(pcmBuffer) {
 
   console.log(`\n📡 Sending ${events.length} events to Nova Sonic...`);
 
+  // Stream events with small delays so Nova Sonic can process them
   async function* makeIterable() {
-    for (const payload of events) yield { chunk: { bytes: payload } };
+    for (const payload of events) {
+      yield { chunk: { bytes: payload } };
+      await new Promise(r => setTimeout(r, 10));
+    }
   }
 
   const response = await client.send(
