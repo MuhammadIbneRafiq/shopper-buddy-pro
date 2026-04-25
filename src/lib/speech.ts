@@ -2,6 +2,7 @@ import { stopActiveListening } from '@/lib/voice-orchestrator';
 
 let activeWs: WebSocket | null = null;
 let activeAudioCtx: AudioContext | null = null;
+let activeWsAborted = false;
 
 const WS_URL = 'wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview';
 
@@ -33,6 +34,7 @@ export function speak(text: string): Promise<void> {
     let settled = false;
     function done() { if (!settled) { settled = true; resolve(); } }
 
+    activeWsAborted = false;
     const ws = new WebSocket(WS_URL, ['realtime', `openai-insecure-api-key.${apiKey}`, 'openai-beta.realtime-v1']);
     activeWs = ws;
     const audioChunks: Uint8Array[] = [];
@@ -92,8 +94,9 @@ export function speak(text: string): Promise<void> {
       }
     };
 
-    ws.onerror = (err) => {
-      console.error('[speak] WebSocket error', err);
+    ws.onerror = () => {
+      if (activeWsAborted) { done(); return; }
+      console.warn('[speak] WebSocket error — falling back to browser TTS');
       speakFallback(text).then(done);
     };
     ws.onclose = () => { if (activeWs === ws) activeWs = null; };
@@ -101,7 +104,7 @@ export function speak(text: string): Promise<void> {
 }
 
 export function stopSpeaking() {
-  if (activeWs) { activeWs.close(); activeWs = null; }
+  if (activeWs) { activeWsAborted = true; activeWs.close(); activeWs = null; }
   if (activeAudioCtx) { activeAudioCtx.close().catch(() => {}); activeAudioCtx = null; }
   if (typeof window !== 'undefined') window.speechSynthesis?.cancel();
 }
