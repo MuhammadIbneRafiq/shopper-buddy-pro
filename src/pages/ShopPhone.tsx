@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { ShoppingCart, Package, ScanBarcode, Check } from "lucide-react";
-import { speak, stopSpeaking } from "@/lib/speech";
+import { isIOSAudioUnlockNeeded, speak, stopSpeaking, unlockIOSAudioFromGesture } from "@/lib/speech";
 import { bunq } from "@/lib/bunq";
 import { toast } from "sonner";
 import { useNovaVoice } from "@/lib/nova-voice";
@@ -82,6 +82,7 @@ export default function ShopPhone() {
     const [balance, setBalance] = useState<number | null>(null);
     const [cameraOn, setCameraOn] = useState(false);
     const [isHolding, setIsHolding] = useState(false);
+    const [showIOSAudioOverlay, setShowIOSAudioOverlay] = useState(false);
 
     // Quantity counter (only used in "quantity" state)
     const [qty, setQty] = useState(0);
@@ -122,6 +123,19 @@ export default function ShopPhone() {
     useEffect(() => { basketRef.current = basket; }, [basket]);
     useEffect(() => { productRef.current = product; }, [product]);
     useEffect(() => { balanceRef.current = balance; }, [balance]);
+    useEffect(() => {
+        setShowIOSAudioOverlay(isIOSAudioUnlockNeeded());
+    }, []);
+
+    async function onIOSAudioOverlayTap() {
+        const unlocked = await unlockIOSAudioFromGesture();
+        if (!unlocked) {
+            toast.error("Please tap again to enable audio on iPhone");
+            return;
+        }
+        setShowIOSAudioOverlay(false);
+        toast.success("Audio unlocked");
+    }
 
     function scannedProductPrompt(scanned: Product) {
         return inputModeRef.current === "voice"
@@ -751,6 +765,22 @@ export default function ShopPhone() {
                     </div>
                 )}
 
+                {showIOSAudioOverlay && (
+                    <div className="shop-phone__ios-audio-overlay" role="dialog" aria-modal="true" aria-label="Enable audio">
+                        <div className="shop-phone__ios-audio-card">
+                            <p className="shop-phone__ios-audio-title">Enable iPhone audio</p>
+                            <p className="shop-phone__ios-audio-copy">Tap once here to enable voice playback, then use the main button below normally.</p>
+                            <button
+                                type="button"
+                                className="shop-phone__ios-audio-btn"
+                                onClick={onIOSAudioOverlayTap}
+                            >
+                                Enable audio
+                            </button>
+                        </div>
+                    </div>
+                )}
+
                 {/* Product info  shown while scanned / counting / added */}
                 {(appState === "scanned" || appState === "quantity" || appState === "added") && product && (
                     <div className={`shop-phone__product-overlay ${appState === "added" ? "shop-phone__product-overlay--added" :
@@ -804,6 +834,7 @@ export default function ShopPhone() {
                     onPointerUp={onPointerUp}
                     onPointerCancel={onPointerCancel}
                     onPointerLeave={onPointerCancel}
+                    disabled={showIOSAudioOverlay}
                     aria-label="Main action button"
                     style={{ touchAction: "none" }}
                 >

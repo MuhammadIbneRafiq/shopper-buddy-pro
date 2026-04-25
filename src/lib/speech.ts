@@ -4,6 +4,7 @@ let activeWs: WebSocket | null = null;
 let activeAudioCtx: AudioContext | null = null;
 let activeHtmlAudio: HTMLAudioElement | null = null;
 let activeWsAborted = false;
+let iosAudioUnlocked = false;
 
 const WS_URL = 'wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview';
 
@@ -23,6 +24,39 @@ function isIOSLikeBrowser(): boolean {
   if (typeof navigator === 'undefined') return false;
   const ua = navigator.userAgent;
   return /iPhone|iPad|iPod/i.test(ua) || (ua.includes('Macintosh') && navigator.maxTouchPoints > 1);
+}
+
+export function isIOSAudioUnlockNeeded(): boolean {
+  return isIOSLikeBrowser() && !iosAudioUnlocked;
+}
+
+export async function unlockIOSAudioFromGesture(): Promise<boolean> {
+  if (!isIOSLikeBrowser()) return true;
+  if (iosAudioUnlocked) return true;
+  if (typeof window === 'undefined') return false;
+
+  const AudioContextCtor = window.AudioContext || (window as any).webkitAudioContext;
+  if (!AudioContextCtor) {
+    iosAudioUnlocked = true;
+    return true;
+  }
+
+  try {
+    const ctx: AudioContext = new AudioContextCtor();
+    await ctx.resume();
+
+    const buffer = ctx.createBuffer(1, 1, 22050);
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    source.connect(ctx.destination);
+    source.start(0);
+
+    await ctx.close();
+    iosAudioUnlocked = true;
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 async function speakViaOpenAIAudioSpeech(text: string, apiKey: string): Promise<void> {
