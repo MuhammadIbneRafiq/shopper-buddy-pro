@@ -22,7 +22,7 @@ A button-first, camera-powered shopping assistant for the visually impaired. Poi
 | Layer | Technology |
 |---|---|
 | Frontend | React 18, TypeScript, Vite (SWC), TailwindCSS, Radix UI |
-| Vision / RAG | AWS Bedrock — Claude 3 Haiku (vision) + Amazon Titan Embed Text v2 |
+| Vision / RAG | AWS Bedrock — Claude 3 Haiku (vision via Bedrock) + Amazon Titan Embed Text v2 (via Bedrock) |
 | Speech-to-text | OpenAI Whisper API |
 | Text-to-speech | OpenAI GPT-4o Realtime API (streaming PCM) |
 | Vector database | AWS Buckets for vector db |
@@ -141,9 +141,9 @@ Hold the button, speak, then release.
 
 ```
 Camera frame (base64)
-  └─► Claude 3 Haiku (vision)
+  └─► Claude 3 Haiku (vision) — routed via AWS Bedrock
         └─► Extracts: brand, name, quantity, packaging, colour, label text
-              └─► Amazon Titan Embed Text v2 → 256-dim vector
+              └─► Amazon Titan Embed Text v2 (Bedrock) → 256-dim vector
                     └─► Cosine similarity search against catalogue embeddings
                           └─► Confidence scoring → spoken result or probable-match disclaimer
 ```
